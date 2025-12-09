@@ -10,7 +10,6 @@ public final class Hamon {
   private var baseURL: String?
   private var userId: String?
   private var fcmToken: String?
-  private var affiseID: String?
   
   private let deviceInfoService = HDeviceInfoService()
   private let encryptionService = HEncryptionService()
@@ -26,7 +25,7 @@ public final class Hamon {
   
   /// Configure SDK with server IP
   /// - Parameters:
-  ///   - host: Server IP address (e.g., "192.168.1.100" or "your.domain.com" for https)
+  ///   - host: Server IP address (e.g., "192.168.1.100")
   ///   - useHTTPS: Use HTTPS protocol (default: false)
   ///   - userId: Optional user identifier (Only if using custom user id instead of Firebase Installations ID)
   public func configure(host: String, useHTTPS: Bool = false, userId: String? = nil) {
@@ -59,20 +58,6 @@ public final class Hamon {
     self.userId = userId
 #if DEBUG
     debugPrint("[Hamon] ✅ userId set: \(userId)")
-#endif
-    // update user data on server
-    DispatchQueue.global(qos: .utility).async { [weak self] in
-      self?.updateUserDataSync()
-    }
-  }
-  
-  // MARK: - Set affise id
-  
-  /// Set Affise ID (Affise Integration with click id)
-  public func setAffiseId(_ id: String) {
-    self.affiseID = id
-#if DEBUG
-    debugPrint("[Hamon] ✅ Affise ID set: \(id)")
 #endif
     // update user data on server
     DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -193,8 +178,7 @@ public final class Hamon {
       appVersionCode: deviceInfoService.getAppVersionCode(),
       buildId: deviceInfoService.getBuildId(),
       locale: deviceInfoService.getLocale(),
-      hints: nil,
-      affiseID: affiseID
+      hints: nil
     )
     
     networkService.updateUser(firebaseAppId: userId, userData: userData) { result in
