@@ -10,8 +10,8 @@ Lightweight, secure, and reliable analytics SDK for iOS with encryption, event b
 
 ## Features
 
-✅ **Zero dependencies** - Firebase Installations required only to set User ID
-✅ **AES/CBC encryption** - All requests are encrypted  
+✅ **Zero dependencies** - Firebase required only to set User ID
+✅ **AES/CBC encryption** - All requests are encrypted
 ✅ **Automatic batching** - 10 events or 2 seconds  
 ✅ **Thread-safe** - Safe to use from any thread  
 ✅ **Retry logic** - Automatic retry on 5xx errors  
@@ -47,7 +47,7 @@ Paste URL: `https://github.com/Jumaon27848/ios_hamon.git`
 
 ```swift
 import Hamon
-import FirebaseInstallations
+import FirebaseAnalytics
 
 func application(_ application: UIApplication, 
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
@@ -55,13 +55,9 @@ func application(_ application: UIApplication,
     // Configure SDK with your server IP
     Hamon.shared.configure(host: "your_server_ip_here")
     
-    // Set Firebase Installation ID as user identifier
-    Installations.installations().installationID { fid, error in
-        if let fid = fid {
-            Hamon.shared.setUserId(fid)
-        } else if let error = error {
-            print("Failed to get Installation ID: \(error.localizedDescription)")
-        }
+    // Set Firebase App Instance ID as user identifier
+    if let appInstanceId = Analytics.appInstanceID() {
+      Hamon.shared.setUserId(appInstanceId)
     }
     
     return true
@@ -73,7 +69,7 @@ func application(_ application: UIApplication,
 ```swift
 import SwiftUI
 import Hamon
-import FirebaseInstallations
+import FirebaseAnalytics
 
 @main
 struct MyApp: App {
@@ -90,10 +86,8 @@ struct MyApp: App {
     private func setupAnalytics() {
         Hamon.shared.configure(host: "your_server_ip_here")
         
-        Installations.installations().installationID { fid, error in
-            if let fid = fid {
-                Hamon.shared.setUserId(fid)
-            }
+        if let appInstanceId = Analytics.appInstanceID() {
+          Hamon.shared.setUserId(appInstanceId)
         }
     }
 }
@@ -131,6 +125,9 @@ if let fcmToken = Messaging.messaging().fcmToken {
     Hamon.shared.setFCM(token: fcmToken)
 }
 
+// Set Affise Click ID
+Hamon.shared.setAffiseId("affise_click_id_here")
+    
 // SDK automatically updates user data with:
 // - Package name (Bundle ID)
 // - App version
@@ -254,7 +251,7 @@ All requests are encrypted using:
 ### User Identification
 
 Priority order:
-1. Firebase Installation ID (recommended)
+1. Firebase App Instance ID (recommended)
 2. Custom userId passed to `configure()`
 3. UUID stored in Keychain
 
@@ -270,8 +267,11 @@ Priority order:
 ///   - userId: Optional user identifier
 func configure(host: String, useHTTPS: Bool = false, userId: String? = nil)
 
-/// Set user ID (Firebase Installation ID recommended)
+/// Set user ID (Firebase App Instance ID recommended)
 func setUserId(_ userId: String)
+
+/// Set Affise Click ID (Affise integration)
+func setAffiseId(_ id: String)
 
 /// Set Firebase Cloud Messaging token
 func setFCM(token: String)
@@ -422,9 +422,9 @@ Hamon.shared.logEvent("share", parameters: [
 2. Add generated XML to Info.plist
 3. Or use HTTPS: `configure(host: "...", useHTTPS: true)`
 
-### Firebase Installation ID not available
+### Firebase App Instance ID not available
 
-**Problem:** Can't get Firebase Installation ID.
+**Problem:** Can't get Firebase App Instance ID.
 
 **Solution:**
 1. Add Firebase to your project
@@ -449,7 +449,7 @@ SDK outputs logs with prefix `[Hamon]`:
 [Hamon] ✅ Sent 5 events successfully
 [Hamon] ✅ User data updated successfully
 [Hamon] ❌ SDK not initialized
-[Hamon] ⚠️ Waiting for userId (Firebase Installation ID)
+[Hamon] ⚠️ Waiting for userId (Firebase App Instance ID)
 ```
 
 ## Best Practices
@@ -469,11 +469,9 @@ func someMethod() {
 
 ### 2. Set userId ASAP
 ```swift
-// ✅ Good - get Firebase Installation ID immediately
-Installations.installations().installationID { fid, _ in
-    if let fid = fid {
-        Hamon.shared.setUserId(fid)
-    }
+// ✅ Good - get Firebase App Instance ID immediately
+if let appInstanceId = Analytics.appInstanceID() {
+    Hamon.shared.setUserId(appInstanceId)
 }
 ```
 
