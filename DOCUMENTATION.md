@@ -2,8 +2,6 @@
 
 Detailed technical documentation for Hamon iOS SDK.
 
-📖 **Translations:** [English](DOCUMENTATION.md) • [Русский](DOCUMENTATION-RU.md) • [Українська](DOCUMENTATION-UA.md)
-
 ## Table of Contents
 
 1. [Architecture](#architecture)
@@ -87,7 +85,7 @@ public func testConnection(host: String, completion: @escaping (Bool, String) ->
 ```swift
 private var isInitialized: Bool           // SDK initialization status
 private var baseURL: String?              // Server address
-private var userId: String?               // User identifier (Firebase Installation ID)
+private var userId: String?               // User identifier (Firebase App Instance ID)
 private var fcmToken: String?             // Firebase Cloud Messaging token
 ```
 
@@ -373,14 +371,14 @@ public func setUserId(_ userId: String)
 Sets user identifier. Required before events can be sent.
 
 **Parameters:**
-- `userId`: Unique user identifier (Firebase Installation ID recommended)
+- `userId`: Unique user identifier (Firebase App Instance ID recommended)
 
 **Example:**
 ```swift
-Installations.installations().installationID { fid, error in
-    if let fid = fid {
-        Hamon.shared.setUserId(fid)
-    }
+import FirebaseAnalytics
+
+if let appInstanceId = Analytics.appInstanceID() {
+    Hamon.shared.setUserId(appInstanceId)
 }
 ```
 
@@ -615,7 +613,8 @@ Decrypted payload:
   "app_version_code": 1,
   "build_id": "21A123",
   "locale": "en_US",
-  "hints": null
+  "hints": null,
+  "affise_clickid" : null
 }
 ```
 
@@ -736,11 +735,9 @@ func application(_ application: UIApplication, ...) -> Bool {
     // Initialize early in app lifecycle
     Hamon.shared.configure(host: "192.168.1.100")
     
-    // Get Firebase Installation ID
-    Installations.installations().installationID { fid, error in
-        if let fid = fid {
-            Hamon.shared.setUserId(fid)
-        }
+    // Then get App Instance ID
+    if let appInstanceId = Analytics.appInstanceID() {
+        Hamon.shared.setUserId(appInstanceId)
     }
     
     return true
@@ -835,13 +832,13 @@ Hamon.shared.flush() // ❌ Defeats batching
 
 ✅ **Do:**
 ```swift
-// Use Firebase Installation ID
-Installations.installations().installationID { fid, error in
-    if let fid = fid {
-        Hamon.shared.setUserId(fid)
-    } else {
-        print("Error: \(error?.localizedDescription ?? "unknown")")
-    }
+// Use Firebase App Instance ID
+import FirebaseAnalytics
+
+if let appInstanceId = Analytics.appInstanceID() {
+    Hamon.shared.setUserId(appInstanceId)
+} else {
+    print("Warning: Firebase App Instance ID not available")
 }
 ```
 
@@ -874,7 +871,7 @@ Hamon.shared.setUserId(UUID().uuidString) // ❌ Changes every install
 
 1. Check userId is set:
 ```swift
-// Add after Installation ID fetch
+// Add after Firebase App Instance ID fetch
 print("UserId set: \(Hamon.shared.userId ?? "none")")
 ```
 
@@ -914,11 +911,12 @@ print(xml)
 Hamon.shared.configure(host: "your-domain.com", useHTTPS: true)
 ```
 
-### Problem: Firebase Installation ID not available
+```
+### Problem: Firebase App Instance ID not available
 
 **Symptoms:**
 ```
-[Hamon] ⚠️ Waiting for userId (Firebase Installation ID)
+[Hamon] ⚠️ Waiting for userId (Firebase App Instance ID)
 ```
 
 **Solutions:**
@@ -926,20 +924,29 @@ Hamon.shared.configure(host: "your-domain.com", useHTTPS: true)
 1. Ensure Firebase is configured:
 ```swift
 import FirebaseCore
+import FirebaseAnalytics
 
 func application(...) -> Bool {
     FirebaseApp.configure() // Must be called first
-    // Then configure analytics
+    
+    // Then get App Instance ID
+    if let appInstanceId = Analytics.appInstanceID() {
+        Hamon.shared.setUserId(appInstanceId)
+    }
+    
+    return true
 }
 ```
 
 2. Check GoogleService-Info.plist is added to project
 
-3. Verify Firebase Installation dependency:
+3. Verify Firebase Analytics is properly imported:
 ```swift
-import FirebaseInstallations // Should not error
+import FirebaseAnalytics // Should not error
 ```
 
+**Note:** `Analytics.appInstanceID()` returns synchronously and may return nil on first app launch before Firebase is fully initialized. In production, consider getting it after a small delay or in `applicationDidBecomeActive`.
+```
 ### Problem: Validation errors (422)
 
 **Symptoms:**

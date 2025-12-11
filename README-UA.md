@@ -1,6 +1,6 @@
 # Hamon SDK для iOS
 
-Легкий, безпечний та надійний аналітичний SDK для iOS з шифруванням, буферизацією подій та автоматичним відправленням.
+Легкий, безпечний та надійний SDK для аналітики на iOS з шифруванням, буферизацією подій та автоматичним надсиланням.
 
 ![iOS 13.0+](https://img.shields.io/badge/iOS-13.0%2B-blue)
 ![Swift 5.7+](https://img.shields.io/badge/Swift-5.7%2B-orange)
@@ -10,14 +10,14 @@
 
 ## Можливості
 
-✅ **Без залежностей** - Firebase Installations потрібен лише для ідентифікації користувача
-✅ **AES/CBC шифрування** - Всі запити шифруються  
-✅ **Автоматична пакетна відправка** - 10 подій або 2 секунди
-✅ **Потокобезпечність** - Безпечно використовувати з будь-якого потоку  
-✅ **Retry логіка** - Автоматичний повтор при помилках 5xx  
-✅ **Підтримка фону** - Автовідправка при згортанні  
-✅ **Дані пристрою** - Автоматичний збір інформації  
-✅ **SwiftUI та UIKit** - Працює з обома фреймворками
+✅ **Без залежностей** - Firebase потрібен лише для встановлення User ID  
+✅ **AES/CBC шифрування** - Всі запити зашифровані  
+✅ **Автоматичне надсилання** - 10 подій або 10 секунд  
+✅ **Thread-safe** - Безпечно використовувати з будь-якого потоку  
+✅ **Retry логіка** - Автоматичний повтор при 5xx помилках  
+✅ **Підтримка background** - Автоматичне надсилання при згортанні  
+✅ **Інформація про пристрій** - Автоматичний збір даних  
+✅ **SwiftUI & UIKit** - Працює з обома фреймворками
 
 ## Вимоги
 
@@ -37,7 +37,7 @@ dependencies: [
 ]
 ```
 
-Або через Xcode:  
+Або в Xcode:  
 **File → Add Package Dependencies**  
 Вставте URL: `https://github.com/Jumaon27848/ios_hamon.git`
 
@@ -47,21 +47,17 @@ dependencies: [
 
 ```swift
 import Hamon
-import FirebaseInstallations
+import FirebaseAnalytics
 
 func application(_ application: UIApplication, 
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     
     // Налаштуйте SDK з IP вашого сервера
-    Hamon.shared.configure(host: "IP_вашого_сервера")
+    Hamon.shared.configure(host: "ваш_ip_сервера")
     
-    // Встановіть Firebase Installation ID як ідентифікатор користувача
-    Installations.installations().installationID { fid, error in
-        if let fid = fid {
-            Hamon.shared.setUserId(fid)
-        } else if let error = error {
-            print("Не вдалося отримати Installation ID: \(error.localizedDescription)")
-        }
+    // Встановіть Firebase App Instance ID як ідентифікатор користувача
+    if let appInstanceId = Analytics.appInstanceID() {
+      Hamon.shared.setUserId(appInstanceId)
     }
     
     return true
@@ -73,7 +69,7 @@ func application(_ application: UIApplication,
 ```swift
 import SwiftUI
 import Hamon
-import FirebaseInstallations
+import FirebaseAnalytics
 
 @main
 struct MyApp: App {
@@ -88,12 +84,10 @@ struct MyApp: App {
     }
     
     private func setupAnalytics() {
-        Hamon.shared.configure(host: "IP_вашого_сервера")
+        Hamon.shared.configure(host: "ваш_ip_сервера")
         
-        Installations.installations().installationID { fid, error in
-            if let fid = fid {
-                Hamon.shared.setUserId(fid)
-            }
+        if let appInstanceId = Analytics.appInstanceID() {
+          Hamon.shared.setUserId(appInstanceId)
         }
     }
 }
@@ -126,15 +120,18 @@ Hamon.shared.logEvent("level_complete", parameters: [
 ### Оновлення даних користувача
 
 ```swift
-// Встановити Firebase Cloud Messaging токен
+// Встановлення Firebase Cloud Messaging токена
 if let fcmToken = Messaging.messaging().fcmToken {
     Hamon.shared.setFCM(token: fcmToken)
 }
 
+// Встановлення Affise Click ID
+Hamon.shared.setAffiseId("affise_click_id_тут")
+    
 // SDK автоматично оновлює дані користувача:
-// - Bundle ID
+// - Ім'я пакету (Bundle ID)
 // - Версія додатку
-// - Версія iOS
+// - Версія ОС
 // - Модель пристрою
 // - Локаль
 // - Код країни
@@ -142,54 +139,54 @@ if let fcmToken = Messaging.messaging().fcmToken {
 // - Статус відстеження реклами
 ```
 
-### Ручне відправлення
+### Ручне надсилання
 
 ```swift
-// Примусово відправити всі буферизовані події
+// Примусово надіслати всі буферизовані події
 Hamon.shared.flush()
 
-// Очистити чергу подій без відправлення
+// Очистити чергу подій без надсилання
 Hamon.shared.clearQueue()
 ```
 
 ## App Transport Security (ATS)
 
-При використанні HTTP-з'єднань необхідно налаштувати ATS у `Info.plist`.
+При використанні HTTP з'єднань необхідно налаштувати ATS в `Info.plist`.
 
 ### Варіант 1: Автоматична генерація XML
 
 ```swift
-// Згенерувати XML для Info.plist
-let xml = Hamon.shared.generateInfoPlistConfiguration(host: "IP_вашого_сервера")
+// Згенерувати XML для вашого Info.plist
+let xml = Hamon.shared.generateInfoPlistConfiguration(host: "ваш_ip_сервера")
 print(xml)
 ```
 
 ### Варіант 2: Тест з'єднання
 
 ```swift
-Hamon.shared.testConnection(host: "IP_вашого_сервера") { success, message in
+Hamon.shared.testConnection(host: "ваш_ip_сервера") { success, message in
     if success {
         print("✅ Сервер доступний")
     } else {
-        print("❌ Помилка підключення: \(message)")
+        print("❌ Помилка з'єднання: \(message)")
         
-        // Отримати конфігурацію ATS за необхідності
-        let xml = Hamon.shared.generateInfoPlistConfiguration(host: "IP_вашого_сервера")
-        print("Додайте до Info.plist:\n\(xml)")
+        // Отримати конфігурацію ATS якщо потрібно
+        let xml = Hamon.shared.generateInfoPlistConfiguration(host: "ваш_ip_сервера")
+        print("Додайте це в Info.plist:\n\(xml)")
     }
 }
 ```
 
 ### Варіант 3: Ручне налаштування
 
-Додайте до `Info.plist`:
+Додайте в `Info.plist`:
 
 ```xml
 <key>NSAppTransportSecurity</key>
 <dict>
     <key>NSExceptionDomains</key>
     <dict>
-        <key>(IP_вашого_сервера)</key>
+        <key>(ваш_ip_сервера)</key>
         <dict>
             <key>NSExceptionAllowsInsecureHTTPLoads</key>
             <true/>
@@ -201,7 +198,7 @@ Hamon.shared.testConnection(host: "IP_вашого_сервера") { success, m
 ### Використання HTTPS
 
 ```swift
-Hamon.shared.configure(host: "your-domain.com", useHTTPS: true)
+Hamon.shared.configure(host: "ваш-домен.com", useHTTPS: true)
 ```
 
 ## Дозвіл на відстеження (iOS 14+)
@@ -227,7 +224,7 @@ if #available(iOS 14, *) {
 }
 ```
 
-Додайте до `Info.plist`:
+Додайте в `Info.plist`:
 
 ```xml
 <key>NSUserTrackingUsageDescription</key>
@@ -238,25 +235,25 @@ if #available(iOS 14, *) {
 
 ### Буферизація подій
 
-Події автоматично відправляються коли:
+Події автоматично надсилаються коли:
 - Накопичено **10+ подій** у черзі
 - Минуло **10 секунд** з першої події
-- Додаток переходить у **фоновий режим**
+- Додаток переходить у **background**
 - Додаток **завершується**
 
 ### Шифрування
 
-Всі запити шифруються використовуючи:
+Всі запити шифруються з використанням:
 - **Алгоритм:** AES/CBC/PKCS5Padding
-- **Ключ:** Кастомний реверсований ключ
-- **Результат:** Base64(IV + encrypted_data)
+- **Ключ:** Кастомний зворотний ключ
+- **Вивід:** Base64(IV + encrypted_data)
 
 ### Ідентифікація користувача
 
 Пріоритет:
-1. Firebase Installation ID (рекомендується)
+1. Firebase App Instance ID (рекомендується)
 2. Кастомний userId переданий у `configure()`
-3. UUID збережений у Keychain
+3. UUID збережений в Keychain
 
 ## API Reference
 
@@ -265,13 +262,16 @@ if #available(iOS 14, *) {
 ```swift
 /// Налаштувати SDK з IP сервера
 /// - Parameters:
-///   - host: IP адреса сервера (наприклад, "192.168.1.100")
+///   - host: IP адреса сервера (напр., "192.168.1.100")
 ///   - useHTTPS: Використовувати HTTPS протокол (за замовчуванням: false)
 ///   - userId: Опціональний ідентифікатор користувача
 func configure(host: String, useHTTPS: Bool = false, userId: String? = nil)
 
-/// Встановити ID користувача (рекомендується Firebase Installation ID)
+/// Встановити user ID (рекомендується Firebase App Instance ID)
 func setUserId(_ userId: String)
+
+/// Встановити Affise Click ID (інтеграція Affise)
+func setAffiseId(_ id: String)
 
 /// Встановити Firebase Cloud Messaging токен
 func setFCM(token: String)
@@ -280,23 +280,23 @@ func setFCM(token: String)
 ### Відстеження подій
 
 ```swift
-/// Записати аналітичну подію
+/// Логувати аналітичну подію
 /// - Parameters:
-///   - name: Назва події
+///   - name: Ім'я події
 ///   - parameters: Параметри події (опціонально)
 func logEvent(_ name: String, parameters: [String: Any] = [:])
 
-/// Примусово відправити всі буферизовані події
+/// Примусово надіслати всі буферизовані події
 func flush()
 
-/// Очистити чергу подій без відправлення
+/// Очистити чергу подій без надсилання
 func clearQueue()
 ```
 
 ### Утиліти
 
 ```swift
-/// Згенерувати XML для Info.plist для налаштування ATS
+/// Згенерувати Info.plist XML для конфігурації ATS
 func generateInfoPlistConfiguration(host: String) -> String
 
 /// Перевірити з'єднання з сервером
@@ -316,8 +316,8 @@ SDK автоматично збирає:
 | `device_model` | Модель пристрою | `iPhone` |
 | `device` | Ідентифікатор пристрою | `iPhone14,2` |
 | `build_id` | Версія ядра | `21A123` |
-| `locale` | Локаль пристрою | `uk_UA` |
-| `geo` | Код країни | `UA` |
+| `locale` | Локаль пристрою | `en_US` |
+| `geo` | Код країни | `US` |
 | `advertising_id` | IDFA або IDFV | `XXXXXXXX-...` |
 | `is_limited_ad_tracking` | Статус відстеження реклами | `false` |
 | `firebase_token` | FCM токен | `xxxxx` |
@@ -329,15 +329,15 @@ SDK автоматично збирає:
 ### E-commerce додаток
 
 ```swift
-// Перегляд товару
+// Перегляд продукту
 Hamon.shared.logEvent("product_view", parameters: [
     "product_id": "123",
-    "product_name": "Преміум підписка",
+    "product_name": "Premium Subscription",
     "price": 9.99,
     "currency": "USD"
 ])
 
-// Додавання до кошика
+// Додавання в кошик
 Hamon.shared.logEvent("add_to_cart", parameters: [
     "product_id": "123",
     "quantity": 1
@@ -352,7 +352,7 @@ Hamon.shared.logEvent("purchase", parameters: [
     "total": 9.99,
     "currency": "USD"
 ])
-Hamon.shared.flush() // Важлива подія - відправити негайно
+Hamon.shared.flush() // Важлива подія - надіслати негайно
 ```
 
 ### Ігровий додаток
@@ -375,7 +375,7 @@ Hamon.shared.logEvent("level_complete", parameters: [
 // Досягнення
 Hamon.shared.logEvent("achievement_unlocked", parameters: [
     "achievement_id": "first_win",
-    "achievement_name": "Перша перемога"
+    "achievement_name": "First Victory"
 ])
 ```
 
@@ -401,45 +401,45 @@ Hamon.shared.logEvent("share", parameters: [
 ])
 ```
 
-## Вирішення проблем
+## Усунення неполадок
 
-### Події не відправляються
+### Події не надсилаються
 
-**Проблема:** Події записуються, але не відправляються на сервер.
+**Проблема:** Події логуються але не надсилаються на сервер.
 
 **Рішення:**
 1. Перевірте чи встановлено `userId`: `Hamon.shared.setUserId()`
 2. Перевірте з'єднання з сервером: `Hamon.shared.testConnection()`
-3. Перевірте налаштування ATS для HTTP
-4. Перевірте логи в консолі на наявність помилок
+3. Перевірте конфігурацію ATS для HTTP
+4. Перевірте логи консолі на наявність помилок
 
 ### ATS блокує з'єднання
 
 **Проблема:** Помилка -1022 "App Transport Security has blocked a cleartext HTTP"
 
 **Рішення:**
-1. Використовуйте `generateInfoPlistConfiguration()` для отримання XML
-2. Додайте згенерований XML до Info.plist
-3. Або використовуйте HTTPS: `configure(host: "...", useHTTPS: true)`
+1. Використайте `generateInfoPlistConfiguration()` для отримання XML
+2. Додайте згенерований XML в Info.plist
+3. Або використайте HTTPS: `configure(host: "...", useHTTPS: true)`
 
-### Firebase Installation ID недоступний
+### Firebase App Instance ID недоступний
 
-**Проблема:** Не вдається отримати Firebase Installation ID.
+**Проблема:** Не вдається отримати Firebase App Instance ID.
 
 **Рішення:**
-1. Додайте Firebase до вашого проєкту
+1. Додайте Firebase у ваш проект
 2. Додайте `GoogleService-Info.plist`
 3. Імпортуйте `FirebaseCore` та викличте `FirebaseApp.configure()`
 
 ### Події буферизуються нескінченно
 
-**Проблема:** Події залишаються в черзі без відправлення.
+**Проблема:** Події залишаються в черзі без надсилання.
 
 **Рішення:**
-- SDK чекає на `userId` перед відправленням подій
-- Викличте `Hamon.shared.setUserId()` для початку відправлення
+- SDK очікує `userId` перед надсиланням подій
+- Викличте `Hamon.shared.setUserId()` щоб почати надсилання
 
-## Відладочні логи
+## Відлагоджувальне логування
 
 SDK виводить логи з префіксом `[Hamon]`:
 
@@ -449,12 +449,12 @@ SDK виводить логи з префіксом `[Hamon]`:
 [Hamon] ✅ Sent 5 events successfully
 [Hamon] ✅ User data updated successfully
 [Hamon] ❌ SDK not initialized
-[Hamon] ⚠️ Waiting for userId (Firebase Installation ID)
+[Hamon] ⚠️ Waiting for userId (Firebase App Instance ID)
 ```
 
 ## Найкращі практики
 
-### 1. Ініціалізація на ранньому етапі
+### 1. Ініціалізуйте рано
 ```swift
 // ✅ Добре - в AppDelegate/App.swift
 func application(_ application: UIApplication, ...) -> Bool {
@@ -467,34 +467,32 @@ func someMethod() {
 }
 ```
 
-### 2. Встановлення userId якомога швидше
+### 2. Встановлюйте userId якомога швидше
 ```swift
-// ✅ Добре - отримати Firebase Installation ID одразу
-Installations.installations().installationID { fid, _ in
-    if let fid = fid {
-        Hamon.shared.setUserId(fid)
-    }
+// ✅ Добре - отримати Firebase App Instance ID негайно
+if let appInstanceId = Analytics.appInstanceID() {
+    Hamon.shared.setUserId(appInstanceId)
 }
 ```
 
-### 3. Використання консистентних назв подій
+### 3. Використовуйте узгоджені імена подій
 ```swift
-// ✅ Добре - консистентне іменування
+// ✅ Добре - узгоджене іменування
 Hamon.shared.logEvent("screen_view", parameters: ["screen_name": "Home"])
 Hamon.shared.logEvent("screen_view", parameters: ["screen_name": "Profile"])
 
-// ❌ Погано - непослідовне
+// ❌ Погано - неузгоджене
 Hamon.shared.logEvent("home_opened")
 Hamon.shared.logEvent("profile_screen_view")
 ```
 
-### 4. Відправлення критичних подій
+### 4. Надсилайте критичні події
 ```swift
-// ✅ Добре - відправити важливі події негайно
+// ✅ Добре - надіслати важливі події негайно
 Hamon.shared.logEvent("purchase", parameters: [...])
 Hamon.shared.flush()
 
-// ✅ Добре - звичайні події використовують автоматичну пакетну відправку
+// ✅ Добре - звичайні події використовують автоматичне групування
 Hamon.shared.logEvent("button_tap", parameters: [...])
 ```
 
@@ -502,13 +500,13 @@ Hamon.shared.logEvent("button_tap", parameters: [...])
 
 | Метрика | Значення |
 |---------|----------|
-| Витрата пам'яті | ~1-2 МБ |
-| CPU (спокій) | <0.1% |
-| CPU (відправка) | ~1-2% |
-| Мережа за пакет | 1-5 КБ |
+| Споживання пам'яті | ~1-2 МБ |
+| CPU (idle) | <0.1% |
+| CPU (batching) | ~1-2% |
+| Мережа на пачку | 1-5 КБ |
 | Вплив на батарею | Мінімальний |
 
 ## Підтримка
 
-- **Проблеми:** [GitHub Issues](https://github.com/Jumaon27848/ios_hamon/issues)
-- **Документація:** [Повна документація](DOCUMENTATION.uk.md)
+- **Issues:** [GitHub Issues](https://github.com/Jumaon27848/ios_hamon/issues)
+- **Документація:** [Повна документація](DOCUMENTATION.md)

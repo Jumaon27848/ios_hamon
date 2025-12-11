@@ -28,7 +28,7 @@ public final class Hamon {
   /// - Parameters:
   ///   - host: Server IP address (e.g., "192.168.1.100" or "your.domain.com" for https)
   ///   - useHTTPS: Use HTTPS protocol (default: false)
-  ///   - userId: Optional user identifier (Only if using custom user id instead of Firebase Installations ID)
+  ///   - userId: Optional user identifier (Only if using custom user id instead of Firebase App Instance ID)
   public func configure(host: String, useHTTPS: Bool = false, userId: String? = nil) {
     self.baseURL = host
     guard let baseURL else { return }
@@ -45,7 +45,7 @@ public final class Hamon {
       self.setUserId(userId)
     } else {
 #if DEBUG
-      debugPrint("[Hamon] ⚠️ Waiting for userId (Firebase Installation ID)")
+      debugPrint("[Hamon] ⚠️ Waiting for userId (Firebase App Instance ID preffered)")
 #endif
     }
     
@@ -54,7 +54,7 @@ public final class Hamon {
   
   // MARK: - Set userId externally
   
-  /// Set user ID (Firebase Installation ID recommended)
+  /// Set user ID (Firebase App Instance ID recommended)
   public func setUserId(_ userId: String) {
     self.userId = userId
 #if DEBUG
