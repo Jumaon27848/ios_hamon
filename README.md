@@ -127,7 +127,10 @@ if let fcmToken = Messaging.messaging().fcmToken {
 
 // Set Affise Click ID
 Hamon.shared.setAffiseId("affise_click_id_here")
-    
+
+// Set Promo Code
+Hamon.shared.setPromoCode("promo_code_here")
+
 // SDK automatically updates user data with:
 // - Package name (Bundle ID)
 // - App version

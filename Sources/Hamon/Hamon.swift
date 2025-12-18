@@ -11,6 +11,7 @@ public final class Hamon {
   private var userId: String?
   private var fcmToken: String?
   private var affiseID: String?
+  private var promoCode: String?
   
   private let deviceInfoService = HDeviceInfoService()
   private let encryptionService = HEncryptionService()
@@ -85,6 +86,15 @@ public final class Hamon {
   /// Set Firebase Cloud Messaging token
   public func setFCM(token: String) {
     self.fcmToken = token
+    // update user data on server
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      self?.updateUserDataSync()
+    }
+  }
+  
+  // MARK: - Set Promo Code
+  public func setPromoCode(_ code: String) {
+    self.promoCode = code
     // update user data on server
     DispatchQueue.global(qos: .utility).async { [weak self] in
       self?.updateUserDataSync()
@@ -194,7 +204,8 @@ public final class Hamon {
       buildId: deviceInfoService.getBuildId(),
       locale: deviceInfoService.getLocale(),
       hints: nil,
-      affiseID: affiseID
+      affiseID: affiseID,
+      promoCode: promoCode
     )
     
     networkService.updateUser(firebaseAppId: userId, userData: userData) { result in
