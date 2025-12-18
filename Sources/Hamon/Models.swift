@@ -24,6 +24,7 @@ public struct HUserData: Codable {
   public let locale: String?
   public let hints: HUserHints?
   public let affiseID: String?
+  public let promoCode: String?
   
   enum CodingKeys: String, CodingKey {
     case libId = "lib_id"
@@ -47,6 +48,7 @@ public struct HUserData: Codable {
     case locale
     case hints
     case affiseID = "affise_clickid"
+    case promoCode = "affise_promo_code"
   }
   
   // Кастомный энкодер, чтобы null явно отправлялся для всех Optional
@@ -73,6 +75,7 @@ public struct HUserData: Codable {
     try container.encode(locale, forKey: .locale)
     try container.encode(hints, forKey: .hints)
     try container.encode(affiseID, forKey: .affiseID)
+    try container.encode(promoCode, forKey: .promoCode)
   }
 }
 
