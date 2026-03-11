@@ -132,7 +132,7 @@ Hamon.shared.setAffiseId("affise_click_id_here")
 Hamon.shared.setPromoCode("promo_code_here")
 
 // SDK automatically updates user data with:
-// - Package name (Bundle ID)
+// - Apple ID (App Store ID from Info.plist)
 // - App version
 // - OS version
 // - Device model
@@ -151,6 +151,17 @@ Hamon.shared.flush()
 // Clear event queue without sending
 Hamon.shared.clearQueue()
 ```
+
+## Required Info.plist Configuration
+
+Add your App Store ID to `Info.plist` — **required** for the SDK to send user data:
+
+```xml
+<key>AppStoreID</key>
+<string>1234567890</string>
+```
+
+> If `AppStoreID` is missing, the SDK logs an error and skips all user data updates.
 
 ## App Transport Security (ATS)
 
@@ -312,7 +323,7 @@ SDK automatically collects:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| `package` | Bundle identifier | `com.example.app` |
+| `package` | App Store ID (from `AppStoreID` in Info.plist) | `1234567890` |
 | `app_version` | App version | `1.0.0` |
 | `app_version_code` | Build number | `1` |
 | `os_version` | iOS version | `17.0` |
@@ -434,6 +445,17 @@ Hamon.shared.logEvent("share", parameters: [
 2. Add `GoogleService-Info.plist`
 3. Import `FirebaseCore` and call `FirebaseApp.configure()`
 
+### AppStoreID not configured
+
+**Problem:** User data is not sent to the server.
+
+**Solution:**
+Add `AppStoreID` to your `Info.plist`:
+```xml
+<key>AppStoreID</key>
+<string>YOUR_APP_STORE_ID</string>
+```
+
 ### Events buffered indefinitely
 
 **Problem:** Events stay in queue without sending.
@@ -453,6 +475,8 @@ SDK outputs logs with prefix `[Hamon]`:
 [Hamon] ✅ User data updated successfully
 [Hamon] ❌ SDK not initialized
 [Hamon] ⚠️ Waiting for userId (Firebase App Instance ID)
+[Hamon] ❌ AppStoreID is not set in Info.plist. User data will not be sent to the server.
+[Hamon] ❌ Skipping user data update: AppStoreID is not configured in Info.plist
 ```
 
 ## Best Practices

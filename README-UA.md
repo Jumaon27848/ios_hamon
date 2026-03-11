@@ -132,7 +132,7 @@ Hamon.shared.setAffiseId("affise_click_id_тут")
 Hamon.shared.setPromoCode("promo_code_here")
 
 // SDK автоматично оновлює дані користувача:
-// - Ім'я пакету (Bundle ID)
+// - Apple ID (App Store ID з Info.plist)
 // - Версія додатку
 // - Версія ОС
 // - Модель пристрою
@@ -151,6 +151,17 @@ Hamon.shared.flush()
 // Очистити чергу подій без надсилання
 Hamon.shared.clearQueue()
 ```
+
+## Обов'язкова конфігурація Info.plist
+
+Додайте ваш App Store ID у `Info.plist` — **обов'язково** для надсилання даних користувача:
+
+```xml
+<key>AppStoreID</key>
+<string>1234567890</string>
+```
+
+> Якщо `AppStoreID` не задано, SDK логує помилку і пропускає всі оновлення даних користувача.
 
 ## App Transport Security (ATS)
 
@@ -312,7 +323,7 @@ SDK автоматично збирає:
 
 | Поле | Опис | Приклад |
 |------|------|---------|
-| `package` | Bundle identifier | `com.example.app` |
+| `package` | App Store ID (з `AppStoreID` в Info.plist) | `1234567890` |
 | `app_version` | Версія додатку | `1.0.0` |
 | `app_version_code` | Номер збірки | `1` |
 | `os_version` | Версія iOS | `17.0` |
@@ -434,6 +445,17 @@ Hamon.shared.logEvent("share", parameters: [
 2. Додайте `GoogleService-Info.plist`
 3. Імпортуйте `FirebaseCore` та викличте `FirebaseApp.configure()`
 
+### AppStoreID не налаштовано
+
+**Проблема:** Дані користувача не надсилаються на сервер.
+
+**Рішення:**
+Додайте `AppStoreID` у `Info.plist`:
+```xml
+<key>AppStoreID</key>
+<string>ВАШ_APP_STORE_ID</string>
+```
+
 ### Події буферизуються нескінченно
 
 **Проблема:** Події залишаються в черзі без надсилання.
@@ -453,6 +475,8 @@ SDK виводить логи з префіксом `[Hamon]`:
 [Hamon] ✅ User data updated successfully
 [Hamon] ❌ SDK not initialized
 [Hamon] ⚠️ Waiting for userId (Firebase App Instance ID)
+[Hamon] ❌ AppStoreID is not set in Info.plist. User data will not be sent to the server.
+[Hamon] ❌ Skipping user data update: AppStoreID is not configured in Info.plist
 ```
 
 ## Найкращі практики

@@ -253,11 +253,17 @@ func encrypt(message: String) -> String? {
 
 **File:** `HDeviceInfoService.swift`
 
+> **Required:** Add `AppStoreID` to your `Info.plist`. If missing, `getAppleId()` returns `nil` and user data updates are skipped entirely.
+> ```xml
+> <key>AppStoreID</key>
+> <string>1234567890</string>
+> ```
+
 #### Collected Data
 
 | Method | Returns | Example |
 |--------|---------|---------|
-| `getPackageName()` | Bundle ID | `com.example.app` |
+| `getAppleId()` | App Store ID (from `AppStoreID` in Info.plist) | `1234567890` |
 | `getOSVersion()` | iOS version | `17.0` |
 | `getDevice()` | Device code | `iPhone14,2` |
 | `getDeviceModel()` | Device model | `iPhone` |
@@ -595,7 +601,7 @@ Decrypted payload:
 ```json
 {
   "lib_id": null,
-  "package": "com.example.app",
+  "package": "1234567890",
   "app_first_open_timestamp": 1234567890000,
   "app_last_update_timestamp": 1234567890000,
   "app_delete_timestamp": null,
@@ -960,6 +966,22 @@ import FirebaseAnalytics // Should not error
 1. Check server expects correct data format
 2. Verify all required fields are provided
 3. Check data types match server expectations
+
+### Problem: AppStoreID not configured
+
+**Symptoms:**
+```
+[Hamon] ❌ AppStoreID is not set in Info.plist. User data will not be sent to the server.
+[Hamon] ❌ Skipping user data update: AppStoreID is not configured in Info.plist
+```
+
+**Solutions:**
+
+Add `AppStoreID` to `Info.plist`:
+```xml
+<key>AppStoreID</key>
+<string>YOUR_APP_STORE_ID</string>
+```
 
 ### Problem: Events buffered indefinitely
 
