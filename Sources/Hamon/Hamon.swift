@@ -174,6 +174,13 @@ public final class Hamon {
   
   private func updateUserDataSync() {
     guard let userId = userId, let networkService = networkService else { return }
+
+    guard let appleId = deviceInfoService.getAppleId() else {
+#if DEBUG
+      debugPrint("[Hamon] ❌ Skipping user data update: AppStoreID is not configured in Info.plist")
+#endif
+      return
+    }
 #if DEBUG
     debugPrint("[Hamon] ℹ️ User ID: \(userId)")
 #endif
@@ -187,7 +194,7 @@ public final class Hamon {
     }
     
     let userData = HUserData(
-      package: deviceInfoService.getPackageName(),
+      package: appleId,
       appFirstOpenTimestamp: firstOpenTimestamp != 0 ? firstOpenTimestamp : nowMillis,
       appLastUpdateTimestamp: nowMillis,
       firebaseToken: fcmToken,

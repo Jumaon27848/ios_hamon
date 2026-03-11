@@ -16,10 +16,16 @@ final class HDeviceInfoService {
   
   // MARK: - Device Info
   
-  func getPackageName() -> String? {
-    return Bundle.main.bundleIdentifier
+  func getAppleId() -> String? {
+    guard let appleId = Bundle.main.infoDictionary?["AppStoreID"] as? String, !appleId.isEmpty else {
+#if DEBUG
+      debugPrint("[Hamon] ❌ AppStoreID is not set in Info.plist. User data will not be sent to the server.")
+#endif
+      return nil
+    }
+    return appleId
   }
-  
+
   func getOSVersion() -> String? {
 #if canImport(UIKit)
     return UIDevice.current.systemVersion
