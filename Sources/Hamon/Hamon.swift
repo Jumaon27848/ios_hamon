@@ -12,6 +12,7 @@ public final class Hamon {
   private var fcmToken: String?
   private var affiseID: String?
   private var promoCode: String?
+  private var webCustomerID: String?
   
   private let deviceInfoService = HDeviceInfoService()
   private let encryptionService = HEncryptionService()
@@ -81,6 +82,20 @@ public final class Hamon {
     }
   }
   
+  // MARK: - Set web customer id
+
+  /// Set Web Customer ID (web-to-app user linking)
+  public func setWebCustomerId(_ id: String) {
+    self.webCustomerID = id
+#if DEBUG
+    debugPrint("[Hamon] ✅ Web Customer ID set: \(id)")
+#endif
+    // update user data on server
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      self?.updateUserDataSync()
+    }
+  }
+
   // MARK: - Set FCM Token
   
   /// Set Firebase Cloud Messaging token
@@ -212,7 +227,8 @@ public final class Hamon {
       locale: deviceInfoService.getLocale(),
       hints: nil,
       affiseID: affiseID,
-      promoCode: promoCode
+      promoCode: promoCode,
+      webCustomerID: webCustomerID
     )
     
     networkService.updateUser(firebaseAppId: userId, userData: userData) { result in

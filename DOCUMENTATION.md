@@ -620,7 +620,8 @@ Decrypted payload:
   "build_id": "21A123",
   "locale": "en_US",
   "hints": null,
-  "affise_clickid" : null
+  "affise_clickid" : null,
+  "web_customer_id" : null
 }
 ```
 

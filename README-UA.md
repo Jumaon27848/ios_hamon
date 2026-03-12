@@ -128,6 +128,9 @@ if let fcmToken = Messaging.messaging().fcmToken {
 // Встановлення Affise Click ID
 Hamon.shared.setAffiseId("affise_click_id_тут")
 
+// Встановлення Web Customer ID
+Hamon.shared.setWebCustomerId("web_customer_id_тут")
+
 // Встановлення Promo Code
 Hamon.shared.setPromoCode("promo_code_here")
 
@@ -286,6 +289,9 @@ func setUserId(_ userId: String)
 
 /// Встановити Affise Click ID (інтеграція Affise)
 func setAffiseId(_ id: String)
+
+/// Встановити Web Customer ID (зв'язок web-to-app користувача)
+func setWebCustomerId(_ id: String)
 
 /// Встановити Firebase Cloud Messaging токен
 func setFCM(token: String)
