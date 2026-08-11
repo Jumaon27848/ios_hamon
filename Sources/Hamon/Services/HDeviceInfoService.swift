@@ -80,6 +80,55 @@ final class HDeviceInfoService {
   func getLocale() -> String? {
     return Locale.current.identifier
   }
+
+  // MARK: - Hardware
+
+  /// Screen size in physical pixels, `"<width>x<height>"`.
+  ///
+  /// `nativeBounds` is always portrait-referenced, so unlike Android — which reports the
+  /// current rotation and flips to `"2340x1080"` in landscape — this value is stable for
+  /// the lifetime of the device. Cached because it never changes and `UIScreen` is
+  /// main-thread API, while the payload is assembled on a background queue.
+  private(set) lazy var screenResolution: String? = {
+#if canImport(UIKit)
+    let pixels = UIScreen.main.nativeBounds
+    let width = Int(pixels.width)
+    let height = Int(pixels.height)
+    guard width > 0, height > 0 else { return nil }
+    return "\(width)x\(height)"
+#else
+    return nil
+#endif
+  }()
+
+  /// Installed RAM in bytes.
+  ///
+  /// Note this is the full installed amount (exactly `4294967296` on a 4 GB device),
+  /// whereas Android's `ActivityManager.MemoryInfo.totalMem` reports only what the kernel
+  /// exposes (~3.7 GB). The two platforms' values are not directly comparable.
+  func getRamTotalBytes() -> Int? {
+    Int(exactly: ProcessInfo.processInfo.physicalMemory)
+  }
+
+  /// Total and available capacity of the volume backing the app, in bytes.
+  ///
+  /// Uses `volumeAvailableCapacityKey` rather than `volumeAvailableCapacityForImportantUsageKey`:
+  /// the latter counts purgeable content as free and would report far more space than
+  /// Android's `StatFs.availableBytes`, which excludes reserved blocks.
+  func getStorageBytes() -> (total: Int?, free: Int?) {
+    let url = URL(fileURLWithPath: NSHomeDirectory())
+    do {
+      let values = try url.resourceValues(
+        forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]
+      )
+      return (values.volumeTotalCapacity, values.volumeAvailableCapacity)
+    } catch {
+#if DEBUG
+      debugPrint("[Hamon] ⚠️ Failed to read storage info: \(error.localizedDescription)")
+#endif
+      return (nil, nil)
+    }
+  }
   
   // MARK: - Advertising & Tracking
   

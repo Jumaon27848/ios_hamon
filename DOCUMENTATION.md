@@ -39,6 +39,19 @@ Detailed technical documentation for Hamon iOS SDK.
         │    ├─► AdSupport (IDFA)
         │    └─► CoreTelephony (geo)
         │
+        ├──► HStorage
+        │    └─► UserDefaults (identifiers across launches)
+        │
+        ├──► HConnectivityService
+        │    └─► NWPathMonitor (connection_type)
+        │
+        ├──► HSessionTracker
+        │    ├─► UIApplication notifications (session_length_first)
+        │    └─► UIWindow.sendEvent swizzle (taps_count_first_30s, opt-in)
+        │
+        ├──► HPaywallTracker
+        │    └─► HStorage (paywall funnel, host-driven)
+        │
         └──► HConfigHelper
              └─► URLSession (connection test)
 ```
@@ -52,6 +65,10 @@ Detailed technical documentation for Hamon iOS SDK.
 | **HEncryptionService** | AES/CBC encryption |
 | **HEventQueue** | Event buffering, batching, auto-flush triggers |
 | **HDeviceInfoService** | Device data collection |
+| **HStorage** | Persisting identifiers (user id, FCM token, attribution) across launches |
+| **HConnectivityService** | Current network transport |
+| **HSessionTracker** | First-session length and first-30-seconds tap count |
+| **HPaywallTracker** | Paywall funnel timings and counters, driven by host `notify…` calls |
 | **HConfigHelper** | ATS configuration, connection testing |
 
 ---
@@ -70,6 +87,24 @@ public func configure(host: String, useHTTPS: Bool = false, userId: String? = ni
 public func setUserId(_ userId: String)
 public func setFCM(token: String)
 
+public func setGdprConsent(_ status: Hamon.GdprConsent)
+public func setGdprConsent(_ status: String)
+public func setAppsFlyerId(_ id: String)
+
+// Identity
+public var userId: String? { get }
+public var appAccountToken: UUID? { get }
+public static func appAccountToken(from appInstanceID: String) -> UUID?
+
+// Paywall funnel
+public func notifyPaywallOpened()
+public func notifyPurchaseStarted()
+public func notifyPurchaseCompleted()
+public func notifyUserAction()
+public func notifyInterstitialShown()
+public func notifyAoaShown()
+public func enableTapTracking()
+
 // Event tracking
 public func logEvent(_ name: String, parameters: [String: Any] = [:])
 public func flush()
@@ -83,23 +118,45 @@ public func testConnection(host: String, completion: @escaping (Bool, String) ->
 #### Internal State
 
 ```swift
+private let lock: NSLock                  // Guards every mutable field below
 private var isInitialized: Bool           // SDK initialization status
 private var baseURL: String?              // Server address
-private var userId: String?               // User identifier (Firebase App Instance ID)
+private var _userId: String?              // User identifier (Firebase App Instance ID)
 private var fcmToken: String?             // Firebase Cloud Messaging token
+private var affiseID: String?             // Affise Click ID
+private var promoCode: String?            // Affise promo code
+private var webCustomerID: String?        // Web-to-app customer ID
+private var updateGeneration: Int         // Debounce token for coalesced PATCHes
 ```
+
+All five identifiers are mirrored into `UserDefaults` via `HStorage` and restored in
+`init()`, so a cold start reports the values it already knows instead of overwriting the
+server with `null` while it waits for the host app to supply them again.
 
 #### Initialization Flow
 
 ```
+init()           → restoreState() from HStorage
+                      ↓
 configure(host:) → checkATSConfiguration()
                  → create HNetworkService
                  → isInitialized = true
-                 → wait for userId
+                 → restored userId?  → scheduleUserDataUpdate()
+                   otherwise         → wait for userId
                       ↓
-setUserId()      → updateUserDataSync()
+setUserId()      → persist + scheduleUserDataUpdate()
                  → start accepting events
 ```
+
+#### Update Coalescing
+
+Setters arrive in bursts at launch (`setUserId`, `setFCM`, `setAffiseId` within the same
+run loop). Each one bumps `updateGeneration` and schedules work on a **serial** queue
+300 ms out; only the last generation survives, so the burst collapses into a single PATCH
+and two updates can never overlap or land out of order.
+
+Setters are also idempotent — passing a value identical to the current one is a no-op and
+sends nothing.
 
 ---
 
@@ -394,17 +451,148 @@ if let appInstanceId = Analytics.appInstanceID() {
 public func setFCM(token: String)
 ```
 
-Sets Firebase Cloud Messaging token.
+Sets Firebase Cloud Messaging token. Sent to the server as `firebase_token`, cached across
+launches and re-sent automatically — it only has to be supplied once per token.
 
 **Parameters:**
 - `token`: FCM token for push notifications
 
+**Requires** (all three, or Firebase never issues a token): the Push Notifications
+capability, an APNs Auth Key (`.p8`) uploaded to the Firebase Console, and a call to
+`registerForRemoteNotifications()`. The last one does *not* need the notification
+permission prompt.
+
 **Example:**
 ```swift
-if let fcmToken = Messaging.messaging().fcmToken {
+Messaging.messaging().delegate = self
+application.registerForRemoteNotifications()
+
+// MessagingDelegate — fires on the first token, on late arrival, and on every rotation
+func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    guard let fcmToken else { return }
     Hamon.shared.setFCM(token: fcmToken)
 }
 ```
+
+Prefer the delegate over a one-shot read of `Messaging.messaging().fcmToken`: at launch the
+token is often not available yet, because it cannot be minted until APNs registration
+completes.
+
+#### userId
+
+```swift
+public var userId: String? { get }
+```
+
+The identifier reported to Hamon — the Firebase App Instance ID unless a custom id was
+passed to `configure()`. Restored from `UserDefaults` on launch, so it is available before
+the host app calls `setUserId` again.
+
+#### appAccountToken
+
+```swift
+public var appAccountToken: UUID? { get }
+public static func appAccountToken(from appInstanceID: String) -> UUID?
+```
+
+`userId` reshaped into the RFC 4122 layout (8-4-4-4-12) that StoreKit requires for
+`Product.PurchaseOption.appAccountToken(_:)`. Returns `nil` when no id is set or it isn't
+exactly 32 hexadecimal characters.
+
+Apple writes the token into the transaction permanently and echoes it back in App Store
+Server Notifications, which is what lets the backend match a purchase to this instance.
+
+**Example:**
+```swift
+var options: Set<Product.PurchaseOption> = []
+if let token = Hamon.shared.appAccountToken {
+    options.insert(.appAccountToken(token))
+}
+
+let result = try await product.purchase(options: options)
+```
+
+Pass it on every purchase — subscription, resubscription and one-off alike. Renewals
+inherit the token automatically.
+
+**Conversion.** Dashes are inserted after characters 8/12/16/20; the characters themselves
+are never altered, so the backend recovers the App Instance ID by stripping them back out:
+
+```
+b9660c2a16297c54d42d5a3986c6e6c8  ->  b9660c2a-1629-7c54-d42d-5a3986c6e6c8
+```
+
+The result is usually *not* a valid UUIDv4 — the version nibble is whatever Firebase
+produced. That is fine: StoreKit only requires the 8-4-4-4-12 shape, not a versioned UUID.
+
+**Caveats.** The Firebase App Instance ID is regenerated on reinstall and on
+`resetAnalyticsData()`, so the token differs across installs and cannot link a user through
+a reinstall. Existing subscribers keep whatever token their original transaction carried —
+Apple never backfills it.
+
+#### Paywall funnel
+
+```swift
+public func notifyPaywallOpened()
+public func notifyPurchaseStarted()
+public func notifyPurchaseCompleted()
+public func notifyUserAction()
+public func notifyInterstitialShown()
+public func notifyAoaShown()
+```
+
+Nothing in the funnel is autonomous — the SDK does not introspect screens or purchases.
+The host app calls these at the right moments and `HPaywallTracker` does the bookkeeping.
+Every field is first-occurrence-only and persisted, so the funnel survives process death.
+
+| Call | Locks | Unit | Precondition |
+|------|-------|------|--------------|
+| `notifyPaywallOpened()` | `time_to_paywall` + freezes the three counters | ms | — |
+| `notifyPurchaseStarted()` | `paywall_conversion_time` | **µs** | a paywall was reported |
+| `notifyPurchaseCompleted()` | `click_to_pay_time` | **whole seconds**, floored | a purchase was started |
+| `notifyUserAction()` | → `actions_before_paywall` | count | — |
+| `notifyInterstitialShown()` | → `inters_shown_before_paywall` | count | — |
+| `notifyAoaShown()` | → `aoa_shown_before_paywall` | count | — |
+
+**Out-of-order calls are dropped silently and never retro-filled.** `notifyPurchaseStarted()`
+before any paywall signal leaves `paywall_conversion_time` null permanently — a later
+`notifyPaywallOpened()` does not rescue it; the host has to signal the purchase again.
+Same for `notifyPurchaseCompleted()` before a started purchase.
+
+A frozen `0` is a real value and ships as `0`. There is no way to tell "the host never
+instrumented actions" from "the user genuinely did nothing".
+
+The three funnel signals trigger a user-data update; the three counters do not.
+
+**Two deliberate divergences from Android:**
+
+1. **Clock.** Android persists `System.nanoTime()` across processes, so the delta is
+   meaningless after a restart or reboot — and `coerceAtLeast(0)` disguises the corruption
+   as an instant conversion. iOS uses wall clock, which stays valid across launches. The
+   units are unchanged, since the backend schema is shared.
+2. **Ordering.** Android dispatches each notify onto a multi-threaded queue, so adjacent
+   `notifyPaywallOpened(); notifyPurchaseStarted()` calls can invert and silently lose the
+   conversion metric. On iOS the bookkeeping is synchronous under a lock, so calls made in
+   order are recorded in order.
+
+**Baseline for `time_to_paywall`.** Android measures from `PackageInfo.firstInstallTime`.
+iOS has no equivalent, so the SDK measures from `Hamon_firstOpenTimestamp` — the same value
+it reports as `app_first_open_timestamp`, stamped when `Hamon.shared` is first constructed.
+The metric therefore means "since the first SDK run", not "since install".
+
+#### enableTapTracking()
+
+```swift
+public func enableTapTracking()
+```
+
+Opts into `taps_count_first_30s`. Off by default because counting taps requires swizzling
+`UIWindow.sendEvent(_:)`, which is process-wide and can collide with other SDKs hooking the
+same method. Public API only — App Store safe. Call once, early, alongside `configure`.
+
+One increment per event carrying a began-phase touch, mirroring Android's `ACTION_DOWN`:
+a two-finger gesture counts once, not twice. The 30-second window anchors at the first
+foreground activation (or immediately, if the app is already active when the host opts in).
 
 #### logEvent(_:parameters:)
 
@@ -620,10 +808,43 @@ Decrypted payload:
   "build_id": "21A123",
   "locale": "en_US",
   "hints": null,
-  "affise_clickid" : null,
-  "web_customer_id" : null
+  "affise_clickid": null,
+  "affise_promo_code": null,
+  "web_customer_id": null,
+  "connection_type": "wifi",
+  "screen_resolution": "1179x2556",
+  "ram_total_bytes": 6442450944,
+  "manufacturer": "Apple",
+  "brand": "Apple",
+  "storage_total": 128000000000,
+  "storage_free": 42000000000,
+  "gdpr_consent_status": "unknown",
+  "hamon_version": "1.1.0",
+  "time_to_paywall": 48000,
+  "actions_before_paywall": 4,
+  "inters_shown_before_paywall": 1,
+  "aoa_shown_before_paywall": 2,
+  "paywall_conversion_time": 3500000,
+  "click_to_pay_time": 6,
+  "session_length_first": 12345,
+  "taps_count_first_30s": 7,
+  "appsflyer_id": null
 }
 ```
+
+**Units are not visible in the wire names.** `time_to_paywall` and `session_length_first`
+are milliseconds, `paywall_conversion_time` is **microseconds**, and `click_to_pay_time`
+is **whole seconds**. The two adjacent `…_time` fields differ by a factor of 10⁶. This
+matches the Android schema exactly and must not be "normalised" on either side.
+
+**`carrier` is absent by design.** `CTCarrier` is deprecated as of iOS 16 and returns the
+placeholder `"--"` from 16.4 on, with no replacement, so iOS omits the key rather than
+sending a fake value. This is the one place where the two platforms' payload schemas differ
+in their key set.
+
+**Null handling differs from Android.** `JSONObject.put(key, null)` removes the key, so
+Android payloads omit unset fields entirely. iOS's hand-written encoder sends an explicit
+`null`, so the payload always carries the full schema.
 
 #### Send Events
 
@@ -690,11 +911,16 @@ SDK automatically retries once after 2 seconds.
 
 | Component | Thread Safety | Implementation |
 |-----------|---------------|----------------|
-| Hamon | Thread-safe | Serial DispatchQueue |
+| Hamon | Thread-safe | `NSLock` over mutable state + serial DispatchQueue for updates |
 | HEventQueue | Thread-safe | Serial DispatchQueue |
 | HNetworkService | Thread-safe | URLSession |
 | HDeviceInfoService | Thread-safe | Read-only operations |
 | HEncryptionService | Thread-safe | Stateless |
+| HStorage | Thread-safe | UserDefaults |
+
+Setters may be called from any thread, and `userId` / `appAccountToken` may be read from
+any thread — the purchase path typically reads them on the main thread while the token
+setters write from a Firebase callback.
 
 ### Queue Structure
 

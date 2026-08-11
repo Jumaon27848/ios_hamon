@@ -37,6 +37,9 @@ dependencies: [
 ]
 ```
 
+> **Подключаете новое приложение?** [INTEGRATION.md](INTEGRATION.md) — пошаговая инструкция.
+> **Обновляетесь с 1.0.5?** [MIGRATION.md](MIGRATION.md) — ломающих изменений нет.
+
 Или в Xcode:  
 **File → Add Package Dependencies**  
 Вставьте URL: `https://github.com/Jumaon27848/ios_hamon.git`
@@ -120,10 +123,8 @@ Hamon.shared.logEvent("level_complete", parameters: [
 ### Обновление данных пользователя
 
 ```swift
-// Установка Firebase Cloud Messaging токена
-if let fcmToken = Messaging.messaging().fcmToken {
-    Hamon.shared.setFCM(token: fcmToken)
-}
+// Установка Firebase Cloud Messaging токена — см. «Push-уведомления (FCM токен)» ниже
+Hamon.shared.setFCM(token: fcmToken)
 
 // Установка Affise Click ID
 Hamon.shared.setAffiseId("affise_click_id_здесь")
@@ -144,6 +145,85 @@ Hamon.shared.setPromoCode("promo_code_here")
 // - Advertising ID / IDFV
 // - Статус отслеживания рекламы
 ```
+
+### Push-уведомления (FCM токен)
+
+FCM registration token уходит на сервер в поле `firebase_token`. У SDK нет зависимости от
+Firebase, поэтому токен передаёт хост-приложение — дальше SDK кэширует его между запусками
+и переотправляет сам, так что достаточно передать значение один раз на токен.
+
+**Без этих трёх вещей Firebase вообще не выдаст токен:**
+
+1. Capability **Push Notifications** в Xcode (entitlement `aps-environment`).
+2. **APNs Auth Key (`.p8`)**, залитый в Firebase Console для этого приложения.
+3. Вызов **`registerForRemoteNotifications()`** — иначе запрос токена падает с
+   `No APNS token specified before fetching FCM Token`. Разрешение на уведомления при этом
+   спрашивать **не нужно**: APNs выдаёт device token и без промпта.
+
+```swift
+import Hamon
+import FirebaseCore
+import FirebaseMessaging
+
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    FirebaseApp.configure()
+
+    Hamon.shared.configure(host: "your_server_ip_here")
+    if let appInstanceId = Analytics.appInstanceID() {
+        Hamon.shared.setUserId(appInstanceId)
+    }
+
+    Messaging.messaging().delegate = self
+    application.registerForRemoteNotifications()   // без промпта на уведомления
+
+    return true
+}
+
+// MARK: - MessagingDelegate
+extension AppDelegate: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let fcmToken else { return }
+        Hamon.shared.setFCM(token: fcmToken)
+    }
+}
+```
+
+> Делегат надёжнее разового чтения `Messaging.messaging().fcmToken` на старте: колбэк
+> срабатывает и когда токен приходит с задержкой (после регистрации в APNs), и при ротации.
+
+### Покупки (`appAccountToken`)
+
+Apple вшивает `appAccountToken` в транзакцию навсегда и возвращает его в App Store Server
+Notifications — именно это позволяет бэкенду смэтчить покупку с юзером аналитики. SDK отдаёт
+App Instance ID, уже приведённый к формату UUID, которого требует StoreKit.
+
+```swift
+import StoreKit
+import Hamon
+
+var options: Set<Product.PurchaseOption> = []
+if let token = Hamon.shared.appAccountToken {
+    options.insert(.appAccountToken(token))
+}
+
+let result = try await product.purchase(options: options)
+```
+
+Проставлять нужно на **каждой** покупке — подписке, ресабе и разовой. Продления подписки
+наследуют токен автоматически.
+
+Конвертация только расставляет дефисы, поэтому бэкенд получает исходный App Instance ID
+обратным удалением дефисов:
+
+```
+b9660c2a16297c54d42d5a3986c6e6c8  ->  b9660c2a-1629-7c54-d42d-5a3986c6e6c8
+```
+
+> **Важно:** Firebase App Instance ID пересоздаётся при переустановке и при
+> `resetAnalyticsData()`, поэтому `appAccountToken` отличается между инсталлами и не склеит
+> юзера через переустановку. У текущих подписчиков токен задним числом не появится — только
+> у покупок, совершённых после релиза.
 
 ### Ручная отправка
 
@@ -270,7 +350,11 @@ if #available(iOS 14, *) {
 Приоритет:
 1. Firebase App Instance ID (рекомендуется)
 2. Кастомный userId переданный в `configure()`
-3. UUID сохраненный в Keychain
+
+Идентификатор — вместе с FCM токеном, Affise Click ID, промокодом и Web Customer ID —
+кэшируется в `UserDefaults` и восстанавливается при следующем запуске. Благодаря этому
+холодный старт отправляет уже известные значения, а не затирает их на сервере `null`, пока
+ждёт, что хост-приложение передаст их заново.
 
 ## API Reference
 
@@ -295,6 +379,58 @@ func setWebCustomerId(_ id: String)
 
 /// Установить Firebase Cloud Messaging токен
 func setFCM(token: String)
+
+/// Зафиксировать решение по GDPR. По умолчанию .unknown, поле никогда не бывает null.
+/// Невалидные значения в String-перегрузке игнорируются — прежнее решение сохраняется.
+func setGdprConsent(_ status: Hamon.GdprConsent)   // .accepted / .rejected / .unknown
+func setGdprConsent(_ status: String)
+
+/// Установить AppsFlyer device ID. Липкое значение — однажды записанное не стирается.
+func setAppsFlyerId(_ id: String)
+```
+
+### Воронка пейволла
+
+```swift
+/// Первый вызов защёлкивает time_to_paywall и замораживает три счётчика ниже.
+func notifyPaywallOpened()
+
+/// Первый вызов после notifyPaywallOpened защёлкивает paywall_conversion_time
+/// (микросекунды). Игнорируется, если пейволл не был заявлен — задним числом не восстановить.
+func notifyPurchaseStarted()
+
+/// Первый вызов после notifyPurchaseStarted защёлкивает click_to_pay_time (целые секунды).
+func notifyPurchaseCompleted()
+
+/// Счётчики, замораживаются первым notifyPaywallOpened(). Ноль уезжает как 0, не как null.
+func notifyUserAction()
+func notifyInterstitialShown()
+func notifyAoaShown()
+
+/// Включить сбор taps_count_first_30s. Свизлит UIWindow.sendEvent(_:), поэтому выключено
+/// по умолчанию — перехват процессный и может конфликтовать с другими SDK.
+func enableTapTracking()
+```
+
+Порядок важен. `notifyPurchaseStarted()` до `notifyPaywallOpened()` молча теряется и
+**не** восстанавливается более поздним сигналом о пейволле; то же с
+`notifyPurchaseCompleted()` до начатой покупки. Все поля защёлкиваются один раз и
+переживают перезапуск приложения.
+
+### Идентификация
+
+```swift
+/// Идентификатор, который отправляется в Hamon (Firebase App Instance ID, если не
+/// передан кастомный). Восстанавливается между запусками автоматически.
+var userId: String? { get }
+
+/// `userId` в формате RFC 4122, которого требует StoreKit для `appAccountToken`.
+/// nil, если id не задан или не является 32 hex-символами.
+var appAccountToken: UUID? { get }
+
+/// Приводит Firebase App Instance ID (32 hex-символа) к виду 8-4-4-4-12.
+/// Только дефисы — сами символы не меняются, конвертация обратима.
+static func appAccountToken(from appInstanceID: String) -> UUID?
 ```
 
 ### Отслеживание событий
@@ -343,6 +479,42 @@ SDK автоматически собирает:
 | `firebase_token` | FCM токен | `xxxxx` |
 | `app_first_open_timestamp` | Время первого запуска | `1234567890000` |
 | `app_last_update_timestamp` | Время последнего обновления | `1234567890000` |
+| `connection_type` | `wifi`, `cellular` или `none` | `wifi` |
+| `screen_resolution` | Размер экрана в пикселях | `1179x2556` |
+| `ram_total_bytes` | Установленная RAM, байты | `6442450944` |
+| `manufacturer` / `brand` | На iOS всегда `Apple` | `Apple` |
+| `storage_total` / `storage_free` | Ёмкость тома, байты | `128000000000` |
+| `hamon_version` | Версия SDK | `1.1.0` |
+
+Задаются хост-приложением:
+
+| Поле | Метод | Пример |
+|------|-------|--------|
+| `web_customer_id` | `setWebCustomerId(_:)` | `abc123` |
+| `affise_clickid` / `affise_promo_code` | `setAffiseId(_:)` / `setPromoCode(_:)` | `xxxxx` |
+| `gdpr_consent_status` | `setGdprConsent(_:)`, по умолчанию `unknown` | `accepted` |
+| `appsflyer_id` | `setAppsFlyerId(_:)` | `1234567890-1234567` |
+
+Поведенческие метрики — см. [Воронка пейволла](#воронка-пейволла):
+
+| Поле | Смысл | Единица |
+|------|-------|---------|
+| `session_length_first` | Первая сессия на переднем плане | **миллисекунды** |
+| `taps_count_first_30s` | Тапы за первые 30 с (по opt-in) | штуки |
+| `time_to_paywall` | Первый запуск → первый пейволл | **миллисекунды** |
+| `actions_before_paywall` | Вызовов `notifyUserAction()` до пейволла | штуки |
+| `inters_shown_before_paywall` | Интерстишлов до пейволла | штуки |
+| `aoa_shown_before_paywall` | App Open Ads до пейволла | штуки |
+| `paywall_conversion_time` | Пейволл → нажатие «купить» | **микросекунды** |
+| `click_to_pay_time` | Нажатие «купить» → покупка выдана | **целые секунды**, вниз |
+
+> ⚠️ `paywall_conversion_time` и `click_to_pay_time` стоят рядом, оба заканчиваются на
+> `_time`, а единицы различаются в 10⁶ раз. Имена на проводе об этом не говорят. Значения
+> совпадают со схемой Android — не «нормализуйте» ни одно из них.
+
+> **На iOS не собирается:** `carrier`. `CTCarrier` задепрекейчен в iOS 16 и с 16.4
+> возвращает заглушку `"--"`, замены Apple не дала — поэтому ключ отсутствует в payload,
+> а не заполняется фиктивным значением.
 
 ## Примеры
 

@@ -26,7 +26,33 @@ public struct HUserData: Codable {
   public let affiseID: String?
   public let promoCode: String?
   public let webCustomerID: String?
-  
+  public let connectionType: String?
+  public let screenResolution: String?
+  public let ramTotalBytes: Int?
+  public let manufacturer: String?
+  public let brand: String?
+  public let storageTotal: Int?
+  public let storageFree: Int?
+  public let gdprConsentStatus: String?
+  public let hamonVersion: String?
+  /// Milliseconds.
+  public let timeToPaywall: Int?
+  public let actionsBeforePaywall: Int?
+  public let intersShownBeforePaywall: Int?
+  public let aoaShownBeforePaywall: Int?
+  /// **Microseconds** — not milliseconds, despite the neighbouring field's name.
+  public let paywallConversionTime: Int?
+  /// **Whole seconds**, floored.
+  public let clickToPayTime: Int?
+  /// Milliseconds.
+  public let sessionLengthFirst: Int?
+  public let tapsCountFirst30s: Int?
+  public let appsflyerId: String?
+
+  // Note: Android also sends `carrier`, which iOS cannot collect — CTCarrier is
+  // deprecated since iOS 16 and returns the placeholder "--" from 16.4 on. The key is
+  // deliberately absent from this payload rather than filled with a fake value.
+
   enum CodingKeys: String, CodingKey {
     case libId = "lib_id"
     case package
@@ -51,6 +77,24 @@ public struct HUserData: Codable {
     case affiseID = "affise_clickid"
     case promoCode = "affise_promo_code"
     case webCustomerID = "web_customer_id"
+    case connectionType = "connection_type"
+    case screenResolution = "screen_resolution"
+    case ramTotalBytes = "ram_total_bytes"
+    case manufacturer
+    case brand
+    case storageTotal = "storage_total"
+    case storageFree = "storage_free"
+    case gdprConsentStatus = "gdpr_consent_status"
+    case hamonVersion = "hamon_version"
+    case timeToPaywall = "time_to_paywall"
+    case actionsBeforePaywall = "actions_before_paywall"
+    case intersShownBeforePaywall = "inters_shown_before_paywall"
+    case aoaShownBeforePaywall = "aoa_shown_before_paywall"
+    case paywallConversionTime = "paywall_conversion_time"
+    case clickToPayTime = "click_to_pay_time"
+    case sessionLengthFirst = "session_length_first"
+    case tapsCountFirst30s = "taps_count_first_30s"
+    case appsflyerId = "appsflyer_id"
   }
   
   // Кастомный энкодер, чтобы null явно отправлялся для всех Optional
@@ -79,6 +123,24 @@ public struct HUserData: Codable {
     try container.encode(affiseID, forKey: .affiseID)
     try container.encode(promoCode, forKey: .promoCode)
     try container.encode(webCustomerID, forKey: .webCustomerID)
+    try container.encode(connectionType, forKey: .connectionType)
+    try container.encode(screenResolution, forKey: .screenResolution)
+    try container.encode(ramTotalBytes, forKey: .ramTotalBytes)
+    try container.encode(manufacturer, forKey: .manufacturer)
+    try container.encode(brand, forKey: .brand)
+    try container.encode(storageTotal, forKey: .storageTotal)
+    try container.encode(storageFree, forKey: .storageFree)
+    try container.encode(gdprConsentStatus, forKey: .gdprConsentStatus)
+    try container.encode(hamonVersion, forKey: .hamonVersion)
+    try container.encode(timeToPaywall, forKey: .timeToPaywall)
+    try container.encode(actionsBeforePaywall, forKey: .actionsBeforePaywall)
+    try container.encode(intersShownBeforePaywall, forKey: .intersShownBeforePaywall)
+    try container.encode(aoaShownBeforePaywall, forKey: .aoaShownBeforePaywall)
+    try container.encode(paywallConversionTime, forKey: .paywallConversionTime)
+    try container.encode(clickToPayTime, forKey: .clickToPayTime)
+    try container.encode(sessionLengthFirst, forKey: .sessionLengthFirst)
+    try container.encode(tapsCountFirst30s, forKey: .tapsCountFirst30s)
+    try container.encode(appsflyerId, forKey: .appsflyerId)
   }
 }
 
