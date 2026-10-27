@@ -329,24 +329,41 @@ func encrypt(message: String) -> String? {
 | `getBuildId()` | Kernel version | `21A123` |
 | `getLocale()` | Locale | `en_US` |
 | `getCountryCode()` | Country | `US` |
-| `getAdvertisingId()` | IDFA/IDFV | `XXXXXXXX-...` |
+| `getAdvertisingId()` | IDFA/IDFV (legacy `advertising_id`) | `XXXXXXXX-...` |
+| `getIDFA()` | IDFA, `nil` unless ATT authorized and non-zero | `XXXXXXXX-...` |
+| `getIDFV()` | Identifier for Vendor | `XXXXXXXX-...` |
 | `isLimitedAdTracking()` | Ad tracking status | `false` |
 
 #### Advertising ID Logic
 
-```
-iOS 14+:
-  ↓
-ATTrackingManager.trackingAuthorizationStatus == .authorized
-  ↓ YES                        ↓ NO
-IDFA                          IDFV
+Since 1.2.0 the profile carries the two identifiers separately, so the server knows which
+one it got:
 
-iOS 13:
-  ↓
-ASIdentifierManager.shared().advertisingIdentifier
-  ↓ valid                      ↓ all zeros
-IDFA                          IDFV
-```
+- `idfv` — always.
+- `idfa` — `getIDFA()`: only when `ATTrackingManager.trackingAuthorizationStatus ==
+  .authorized` (iOS 14+) and the identifier is not all zeros; otherwise the key is omitted.
+- `advertising_id` — unchanged legacy field, `getIDFA() ?? getIDFV()`.
+
+`HTrackingMonitor` makes a late ATT grant reach the server without a relaunch: it calls back
+on every `didBecomeActive` and, for the first 5 minutes after the first launch, every 3 s.
+`Hamon` re-reads the IDFA and schedules a PATCH if it differs from the last one sent. The
+current status is read rather than the prompt's callback (iOS 17.4 called back early).
+
+#### On-device conversion (`odm_info`)
+
+`HOnDeviceConversionService` fetches Google's ICM string once per install, only for installs
+whose first launch ran on 1.2.0+ (`Hamon_odm_state` is set when the first-open timestamp is
+first recorded). It calls `ODCConversionManager` through the Objective-C runtime —
+`setFirstLaunchTime:` with the stored first-open time, then
+`fetchAggregateConversionInfoForInteraction:completion:` with `Installation` — because the
+library arrives with Firebase via CocoaPods and a SwiftPM dependency would duplicate it.
+
+| Outcome | Result |
+|---------|--------|
+| string | stored, `odm_info` sent with the next PATCH |
+| `nil` without error (EEA/UK/CH, expired) | done, field never sent |
+| library missing | done, field never sent |
+| error | retried after 15 s, 30 s; at most 3 attempts per install, also across launches |
 
 #### Country Code Priority
 

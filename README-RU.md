@@ -304,7 +304,7 @@ Hamon.shared.configure(host: "ваш-домен.com", useHTTPS: true)
 import AppTrackingTransparency
 
 if #available(iOS 14, *) {
-    Hamon.shared.requestTrackingAuthorization { status in
+    ATTrackingManager.requestTrackingAuthorization { status in
         switch status {
         case .authorized:
             print("Отслеживание разрешено")
@@ -327,6 +327,24 @@ if #available(iOS 14, *) {
 <key>NSUserTrackingUsageDescription</key>
 <string>Мы используем отслеживание для персонализации вашего опыта</string>
 ```
+
+SDK сам подхватывает IDFA: перечитывает статус ATT при каждом возврате приложения в активное
+состояние, а в первые 5 минут после установки — раз в несколько секунд. Как только отслеживание
+разрешено, профиль уходит повторно с `idfa` — дополнительный вызов из приложения не нужен.
+
+## Google Integrated Conversion Measurement (ICM)
+
+При новой установке SDK получает у гугловой библиотеки строку `odm_info` и отправляет её в
+профиле. По ней Google атрибутирует установки без IDFA. Кода в приложении не нужно, но:
+
+- **В приложении должен быть Firebase Analytics версии не ниже 11.14.0** (`Podfile.lock` →
+  `FirebaseAnalytics`; у Flutter-приложений — `ios/Podfile.lock`). Он приносит с собой
+  `GoogleAdsOnDeviceConversion`. Ниже или нет вовсе — обновить или подключить, иначе ICM не
+  работает.
+- **`GoogleAdsOnDeviceConversion` отдельно не подключать.** Hamon от неё не зависит и
+  использует копию, пришедшую с Firebase, — библиотека в приложении остаётся одна.
+- Без библиотеки или там, где Google данных не даёт (ЕЭЗ, Великобритания, Швейцария),
+  `odm_info` просто не отправляется. Установки, сделанные до SDK 1.2.0, его не отправляют.
 
 ## Как это работает
 
@@ -474,7 +492,10 @@ SDK автоматически собирает:
 | `build_id` | Версия ядра | `21A123` |
 | `locale` | Локаль устройства | `en_US` |
 | `geo` | Код страны | `US` |
-| `advertising_id` | IDFA или IDFV | `XXXXXXXX-...` |
+| `advertising_id` | IDFA или IDFV (устаревшее, оставлено для совместимости) | `XXXXXXXX-...` |
+| `idfv` | Identifier for Vendor, отправляется всегда | `XXXXXXXX-...` |
+| `idfa` | IDFA — только если ATT разрешён, иначе ключа нет | `XXXXXXXX-...` |
+| `odm_info` | Данные Google on-device conversion (ICM) — нет, пока не получены | `abcdEfadGdaf` |
 | `is_limited_ad_tracking` | Статус отслеживания рекламы | `false` |
 | `firebase_token` | FCM токен | `xxxxx` |
 | `app_first_open_timestamp` | Время первого запуска | `1234567890000` |
@@ -484,7 +505,7 @@ SDK автоматически собирает:
 | `ram_total_bytes` | Установленная RAM, байты | `6442450944` |
 | `manufacturer` / `brand` | На iOS всегда `Apple` | `Apple` |
 | `storage_total` / `storage_free` | Ёмкость тома, байты | `128000000000` |
-| `hamon_version` | Версия SDK | `1.1.0` |
+| `hamon_version` | Версия SDK | `1.2.0` |
 
 Задаются хост-приложением:
 

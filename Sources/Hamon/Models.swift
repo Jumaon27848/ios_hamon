@@ -48,6 +48,12 @@ public struct HUserData: Codable {
   public let sessionLengthFirst: Int?
   public let tapsCountFirst30s: Int?
   public let appsflyerId: String?
+  /// Always present on iOS.
+  public let idfv: String?
+  /// Only when ATT is authorized and the id isn't zeroed — omitted from the payload otherwise.
+  public let idfa: String?
+  /// Google on-device conversion info (ICM) — omitted from the payload until there is one.
+  public let odmInfo: String?
 
   // Note: Android also sends `carrier`, which iOS cannot collect — CTCarrier is
   // deprecated since iOS 16 and returns the placeholder "--" from 16.4 on. The key is
@@ -95,6 +101,9 @@ public struct HUserData: Codable {
     case sessionLengthFirst = "session_length_first"
     case tapsCountFirst30s = "taps_count_first_30s"
     case appsflyerId = "appsflyer_id"
+    case idfv
+    case idfa
+    case odmInfo = "odm_info"
   }
   
   // Кастомный энкодер, чтобы null явно отправлялся для всех Optional
@@ -141,6 +150,11 @@ public struct HUserData: Codable {
     try container.encode(sessionLengthFirst, forKey: .sessionLengthFirst)
     try container.encode(tapsCountFirst30s, forKey: .tapsCountFirst30s)
     try container.encode(appsflyerId, forKey: .appsflyerId)
+    try container.encode(idfv, forKey: .idfv)
+    // The two exceptions to the explicit-null rule: the spec asks for these keys to be
+    // absent, not null, when there is no value.
+    try container.encodeIfPresent(idfa, forKey: .idfa)
+    try container.encodeIfPresent(odmInfo, forKey: .odmInfo)
   }
 }
 

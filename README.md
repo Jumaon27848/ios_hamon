@@ -306,7 +306,7 @@ Hamon.shared.configure(host: "your-domain.com", useHTTPS: true)
 import AppTrackingTransparency
 
 if #available(iOS 14, *) {
-    Hamon.shared.requestTrackingAuthorization { status in
+    ATTrackingManager.requestTrackingAuthorization { status in
         switch status {
         case .authorized:
             print("Tracking authorized")
@@ -329,6 +329,25 @@ Add to `Info.plist`:
 <key>NSUserTrackingUsageDescription</key>
 <string>We use tracking to personalize your experience</string>
 ```
+
+The SDK picks the IDFA up by itself: it re-reads the ATT status every time the app becomes
+active and, during the first 5 minutes after install, every few seconds. As soon as tracking
+is authorized the profile is re-sent with `idfa` — no extra call from the app is needed.
+
+## Google Integrated Conversion Measurement (ICM)
+
+On a fresh install the SDK asks Google's on-device conversion library for the `odm_info`
+string and sends it with the profile. Google uses it to attribute installs that have no IDFA.
+The app needs no code for this, but:
+
+- **Firebase Analytics 11.14.0 or newer must be in the app** (`Podfile.lock` →
+  `FirebaseAnalytics`; Flutter apps: `ios/Podfile.lock`). It brings
+  `GoogleAdsOnDeviceConversion` along. Older or missing — update or add it, otherwise ICM
+  does not work.
+- **Do not add `GoogleAdsOnDeviceConversion` separately.** Hamon has no dependency on it and
+  uses the copy that comes with Firebase, so the app keeps a single copy of the library.
+- Without the library, or where Google gives no data (EEA, UK, Switzerland), `odm_info` is
+  simply not sent. Installs made before SDK 1.2.0 never send it.
 
 ## How It Works
 
@@ -476,7 +495,10 @@ SDK automatically collects:
 | `build_id` | Kernel version | `21A123` |
 | `locale` | Device locale | `en_US` |
 | `geo` | Country code | `US` |
-| `advertising_id` | IDFA or IDFV | `XXXXXXXX-...` |
+| `advertising_id` | IDFA or IDFV (legacy, kept for compatibility) | `XXXXXXXX-...` |
+| `idfv` | Identifier for Vendor, always sent | `XXXXXXXX-...` |
+| `idfa` | IDFA — only when ATT is authorized, otherwise the key is absent | `XXXXXXXX-...` |
+| `odm_info` | Google on-device conversion info (ICM) — absent until available | `abcdEfadGdaf` |
 | `is_limited_ad_tracking` | Ad tracking status | `false` |
 | `firebase_token` | FCM token | `xxxxx` |
 | `app_first_open_timestamp` | First launch time | `1234567890000` |
@@ -486,7 +508,7 @@ SDK automatically collects:
 | `ram_total_bytes` | Installed RAM, bytes | `6442450944` |
 | `manufacturer` / `brand` | Always `Apple` on iOS | `Apple` |
 | `storage_total` / `storage_free` | Volume capacity, bytes | `128000000000` |
-| `hamon_version` | SDK version | `1.1.0` |
+| `hamon_version` | SDK version | `1.2.0` |
 
 Set by the host app:
 

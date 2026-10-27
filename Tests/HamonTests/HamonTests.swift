@@ -99,12 +99,18 @@ final class HamonTests: XCTestCase {
     "hamon_version", "time_to_paywall", "actions_before_paywall",
     "inters_shown_before_paywall", "aoa_shown_before_paywall", "paywall_conversion_time",
     "click_to_pay_time", "session_length_first", "taps_count_first_30s", "appsflyer_id",
+    "idfv",
   ]
+
+  /// Sent only when there is a value — never as an explicit null.
+  private static let optionalWireKeys: Set<String> = ["idfa", "odm_info"]
 
   private func makeUserData(
     package: String = "com.example.app",
     firebaseToken: String? = "fcm_token",
-    geo: String? = "UA"
+    geo: String? = "UA",
+    idfa: String? = nil,
+    odmInfo: String? = nil
   ) -> HUserData {
     HUserData(
       package: package,
@@ -144,7 +150,10 @@ final class HamonTests: XCTestCase {
       clickToPayTime: 6,
       sessionLengthFirst: 12_345,
       tapsCountFirst30s: 7,
-      appsflyerId: "1234567890-1234567"
+      appsflyerId: "1234567890-1234567",
+      idfv: "11111111-2222-3333-4444-555555555555",
+      idfa: idfa,
+      odmInfo: odmInfo
     )
   }
 
@@ -171,6 +180,30 @@ final class HamonTests: XCTestCase {
     XCTAssertTrue(json["firebase_token"] is NSNull)
     XCTAssertTrue(json["geo"] is NSNull)
     XCTAssertEqual(Set(json.keys), Self.expectedWireKeys)
+  }
+
+  func testIdfaAndOdmInfoAreOmittedWhenAbsent() throws {
+    let data = try JSONEncoder().encode(makeUserData())
+    let json = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+
+    XCTAssertNil(json["idfa"])
+    XCTAssertNil(json["odm_info"])
+    XCTAssertEqual(json["idfv"] as? String, "11111111-2222-3333-4444-555555555555")
+  }
+
+  func testIdfaAndOdmInfoAreSentWhenPresent() throws {
+    let data = try JSONEncoder().encode(
+      makeUserData(idfa: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", odmInfo: "abcdEfadGdaf")
+    )
+    let json = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+
+    XCTAssertEqual(json["idfa"] as? String, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+    XCTAssertEqual(json["odm_info"] as? String, "abcdEfadGdaf")
+    XCTAssertEqual(Set(json.keys), Self.expectedWireKeys.union(Self.optionalWireKeys))
   }
 
   func testUserDataDoesNotSendCarrier() throws {
@@ -832,4 +865,224 @@ final class HamonTests: XCTestCase {
     )
   }
 #endif
+
+  // MARK: - On-device conversion (odm_info)
+
+  private struct FetchError: Error {}
+
+  /// Answers with the next scripted result and records every call.
+  private final class ScriptedFetcher {
+    private let lock = NSLock()
+    private var results: [HOnDeviceConversionService.FetchResult]
+    private var _firstLaunches: [Date] = []
+
+    init(_ results: [HOnDeviceConversionService.FetchResult]) {
+      self.results = results
+    }
+
+    var firstLaunches: [Date] {
+      lock.lock()
+      defer { lock.unlock() }
+      return _firstLaunches
+    }
+
+    var calls: Int { firstLaunches.count }
+
+    func fetch(
+      _ firstLaunch: Date,
+      _ completion: @escaping (HOnDeviceConversionService.FetchResult) -> Void
+    ) {
+      lock.lock()
+      _firstLaunches.append(firstLaunch)
+      let result: HOnDeviceConversionService.FetchResult =
+        results.isEmpty ? .unavailable : results.removeFirst()
+      lock.unlock()
+      completion(result)
+    }
+  }
+
+  private func makeOdmService(
+    storage: HStorage,
+    fetcher: ScriptedFetcher,
+    retryDelay: TimeInterval = 3600
+  ) -> HOnDeviceConversionService {
+    HOnDeviceConversionService(storage: storage, retryDelay: retryDelay) { firstLaunch, completion in
+      fetcher.fetch(firstLaunch, completion)
+    }
+  }
+
+  func testOdmInfoIsFetchedAndStoredForNewInstalls() throws {
+    let storage = try makeStorage()
+    defer { storage.reset() }
+    let fetcher = ScriptedFetcher([.info("abcdEfadGdaf")])
+    let service = makeOdmService(storage: storage, fetcher: fetcher)
+
+    let available = expectation(description: "odm_info available")
+    service.onInfoAvailable = { available.fulfill() }
+
+    let firstLaunch = Date(timeIntervalSince1970: 1_700_000_000)
+    service.markNewInstall()
+    service.fetchIfNeeded(firstLaunch: firstLaunch)
+
+    wait(for: [available], timeout: 1.0)
+    XCTAssertEqual(service.odmInfo, "abcdEfadGdaf")
+    XCTAssertEqual(fetcher.firstLaunches, [firstLaunch])
+  }
+
+  func testOdmInfoIsFetchedOncePerInstall() throws {
+    let storage = try makeStorage()
+    defer { storage.reset() }
+    let fetcher = ScriptedFetcher([.info("first"), .info("second")])
+    let service = makeOdmService(storage: storage, fetcher: fetcher)
+
+    service.markNewInstall()
+    service.fetchIfNeeded(firstLaunch: Date())
+    service.fetchIfNeeded(firstLaunch: Date())
+
+    // A relaunch must not fetch again either.
+    let relaunched = makeOdmService(storage: storage, fetcher: fetcher)
+    relaunched.fetchIfNeeded(firstLaunch: Date())
+
+    XCTAssertEqual(fetcher.calls, 1)
+    XCTAssertEqual(relaunched.odmInfo, "first")
+  }
+
+  func testOdmInfoIsNotFetchedForInstallsThatPredateTheFeature() throws {
+    let storage = try makeStorage()
+    defer { storage.reset() }
+    let fetcher = ScriptedFetcher([.info("abcdEfadGdaf")])
+    let service = makeOdmService(storage: storage, fetcher: fetcher)
+
+    service.fetchIfNeeded(firstLaunch: Date())
+
+    XCTAssertEqual(fetcher.calls, 0)
+    XCTAssertNil(service.odmInfo)
+  }
+
+  func testMissingLibraryEndsTheFlowQuietly() throws {
+    try assertFlowEndsWithoutInfo(after: .libraryMissing)
+  }
+
+  func testNoInfoFromGoogleEndsTheFlowQuietly() throws {
+    try assertFlowEndsWithoutInfo(after: .unavailable)
+  }
+
+  private func assertFlowEndsWithoutInfo(
+    after result: HOnDeviceConversionService.FetchResult,
+    function: String = #function
+  ) throws {
+    let storage = try makeStorage(function: function)
+    defer { storage.reset() }
+    let fetcher = ScriptedFetcher([result, .info("late")])
+    let service = makeOdmService(storage: storage, fetcher: fetcher)
+    service.onInfoAvailable = { XCTFail("no odm_info expected") }
+
+    service.markNewInstall()
+    service.fetchIfNeeded(firstLaunch: Date())
+    service.fetchIfNeeded(firstLaunch: Date())
+
+    XCTAssertEqual(fetcher.calls, 1)
+    XCTAssertNil(service.odmInfo)
+  }
+
+  func testOdmFetchFailuresAreRetriedUpToTheLimit() throws {
+    let storage = try makeStorage()
+    defer { storage.reset() }
+    let failures = Array(
+      repeating: HOnDeviceConversionService.FetchResult.failed(FetchError()),
+      count: HOnDeviceConversionService.maxAttempts
+    )
+    let fetcher = ScriptedFetcher(failures + [.info("too late")])
+    let service = makeOdmService(storage: storage, fetcher: fetcher, retryDelay: 0.01)
+
+    service.markNewInstall()
+    service.fetchIfNeeded(firstLaunch: Date())
+
+    // Retries wait 0.01 s and 0.02 s; leave ample slack.
+    Thread.sleep(forTimeInterval: 0.5)
+    service.fetchIfNeeded(firstLaunch: Date())
+
+    XCTAssertEqual(fetcher.calls, HOnDeviceConversionService.maxAttempts)
+    XCTAssertNil(service.odmInfo)
+  }
+
+  func testOdmFetchSucceedsAfterAFailure() throws {
+    let storage = try makeStorage()
+    defer { storage.reset() }
+    let fetcher = ScriptedFetcher([.failed(FetchError()), .info("abcdEfadGdaf")])
+    let service = makeOdmService(storage: storage, fetcher: fetcher, retryDelay: 0.01)
+
+    let available = expectation(description: "odm_info available")
+    service.onInfoAvailable = { available.fulfill() }
+
+    service.markNewInstall()
+    service.fetchIfNeeded(firstLaunch: Date())
+
+    wait(for: [available], timeout: 1.0)
+    XCTAssertEqual(service.odmInfo, "abcdEfadGdaf")
+    XCTAssertEqual(fetcher.calls, 2)
+  }
+
+  /// The test bundle has no Google library — the runtime lookup must fail gracefully.
+  func testGoogleLibraryLookupReportsMissingLibrary() {
+    let done = expectation(description: "fetch completed")
+    HOnDeviceConversionService.fetchFromGoogleLibrary(firstLaunch: Date()) { result in
+      if case .libraryMissing = result {} else {
+        XCTFail("expected .libraryMissing, got \(result)")
+      }
+      done.fulfill()
+    }
+    wait(for: [done], timeout: 1.0)
+  }
+
+  // MARK: - Tracking Monitor
+
+  func testTrackingMonitorPollsInsideTheWindow() {
+    let monitor = HTrackingMonitor(pollWindow: 60, pollInterval: 0.01)
+    let polled = expectation(description: "polled")
+    polled.assertForOverFulfill = false
+    monitor.onCheck = { polled.fulfill() }
+
+    monitor.start(firstLaunch: Date())
+
+    wait(for: [polled], timeout: 1.0)
+    XCTAssertTrue(monitor.isPolling)
+    monitor.stopPolling()
+    XCTAssertFalse(monitor.isPolling)
+  }
+
+  func testTrackingMonitorDoesNotPollAfterTheWindow() {
+    let monitor = HTrackingMonitor(pollWindow: 60, pollInterval: 0.01)
+    monitor.start(firstLaunch: Date(timeIntervalSinceNow: -120))
+    XCTAssertFalse(monitor.isPolling)
+  }
+
+  func testTrackingMonitorStopsPollingWhenTheWindowCloses() {
+    let monitor = HTrackingMonitor(pollWindow: 0.1, pollInterval: 0.01)
+    monitor.start(firstLaunch: Date())
+    XCTAssertTrue(monitor.isPolling)
+
+    Thread.sleep(forTimeInterval: 0.4)
+    XCTAssertFalse(monitor.isPolling)
+  }
+
+#if canImport(UIKit)
+  func testTrackingMonitorChecksOnEveryActivation() {
+    let monitor = HTrackingMonitor(pollWindow: 0, pollInterval: 60)
+    let checked = expectation(description: "checked on activation")
+    checked.expectedFulfillmentCount = 2
+    monitor.onCheck = { checked.fulfill() }
+
+    monitor.start(firstLaunch: Date())
+    NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+    NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+
+    wait(for: [checked], timeout: 1.0)
+  }
+#endif
+
+  func testLegacyAdvertisingIdIsIdfaOrElseIdfv() {
+    let service = HDeviceInfoService()
+    XCTAssertEqual(service.getAdvertisingId(), service.getIDFA() ?? service.getIDFV())
+  }
 }

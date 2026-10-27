@@ -146,29 +146,38 @@ final class HDeviceInfoService {
 #endif
   }
   
+  /// Legacy `advertising_id`: IDFA when available, otherwise IDFV — the server cannot tell
+  /// which one it got. Kept for older backends; new code reads ``getIDFA()`` and
+  /// ``getIDFV()`` separately.
   func getAdvertisingId() -> String? {
+    getIDFA() ?? getIDFV()
+  }
+
+  /// IDFA, or `nil` unless tracking is authorized and the identifier is real.
+  ///
+  /// Reads the *current* ATT status rather than trusting the prompt's callback — on
+  /// iOS 17.4 the callback could fire before the user had actually tapped a button.
+  func getIDFA() -> String? {
 #if canImport(AppTrackingTransparency)
     if #available(iOS 14, *) {
       guard ATTrackingManager.trackingAuthorizationStatus == .authorized else {
-        return getIDFV()
+        return nil
       }
     }
 #endif
-    
+
 #if canImport(AdSupport)
-    let idfa = ASIdentifierManager.shared().advertisingIdentifier
-    
-    if idfa.uuidString == "00000000-0000-0000-0000-000000000000" {
-      return getIDFV()
-    }
-    
-    return idfa.uuidString
+    // Limited ad tracking on iOS 13 (and a few edge cases on 14+) shows up as a zeroed id.
+    let idfa = ASIdentifierManager.shared().advertisingIdentifier.uuidString
+    return idfa == HDeviceInfoService.zeroIdfa ? nil : idfa
 #else
-    return getIDFV()
+    return nil
 #endif
   }
-  
-  private func getIDFV() -> String? {
+
+  private static let zeroIdfa = "00000000-0000-0000-0000-000000000000"
+
+  func getIDFV() -> String? {
 #if canImport(UIKit)
     return UIDevice.current.identifierForVendor?.uuidString
 #else

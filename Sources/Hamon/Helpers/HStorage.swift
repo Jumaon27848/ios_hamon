@@ -38,6 +38,12 @@ final class HStorage {
     /// Pre-existing key — kept verbatim so installs from earlier versions
     /// don't lose their first-open timestamp.
     case firstOpenTimestamp = "Hamon_firstOpenTimestamp"
+
+    // Google on-device conversion (ICM). `odmState` is absent on installs that predate the
+    // feature — those never fetch, since Google only wants the string for fresh installs.
+    case odmState = "Hamon_odm_state"
+    case odmAttempts = "Hamon_odm_attempts"
+    case odmInfo = "Hamon_odm_info"
   }
 
   private let defaults: UserDefaults

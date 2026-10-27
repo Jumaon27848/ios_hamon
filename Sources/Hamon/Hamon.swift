@@ -20,6 +20,9 @@ public final class Hamon {
   private var webCustomerID: String?
   private var gdprConsentStatus: String?
   private var appsflyerId: String?
+  /// The IDFA the last PATCH carried — lets `checkTrackingAuthorization` tell a fresh
+  /// grant from one already reported.
+  private var reportedIdfa: String?
   private var networkService: HNetworkService?
   private var updateGeneration = 0
 
@@ -30,6 +33,8 @@ public final class Hamon {
   private let connectivityService = HConnectivityService()
   private let sessionTracker: HSessionTracker
   private let paywallTracker: HPaywallTracker
+  private let onDeviceConversionService: HOnDeviceConversionService
+  private let trackingMonitor = HTrackingMonitor()
 
   /// Serial, so two PATCHes can never overlap or land out of order.
   private let updateQueue = DispatchQueue(label: "com.hamon.userdata", qos: .utility)
@@ -42,11 +47,20 @@ public final class Hamon {
   private init() {
     sessionTracker = HSessionTracker(storage: storage)
     paywallTracker = HPaywallTracker(storage: storage)
-    recordFirstOpenIfNeeded()
+    onDeviceConversionService = HOnDeviceConversionService(storage: storage)
+    if recordFirstOpenIfNeeded() {
+      onDeviceConversionService.markNewInstall()
+    }
     restoreState()
     setupEventQueueCallback()
     sessionTracker.onMetricLocked = { [weak self] in
       self?.scheduleUserDataUpdate()
+    }
+    onDeviceConversionService.onInfoAvailable = { [weak self] in
+      self?.scheduleUserDataUpdate()
+    }
+    trackingMonitor.onCheck = { [weak self] in
+      self?.checkTrackingAuthorization()
     }
   }
 
@@ -73,6 +87,12 @@ public final class Hamon {
     }
 
     sessionTracker.start()
+
+    let firstLaunch = Date(
+      timeIntervalSince1970: TimeInterval(storage.integer(for: .firstOpenTimestamp)) / 1000
+    )
+    trackingMonitor.start(firstLaunch: firstLaunch)
+    onDeviceConversionService.fetchIfNeeded(firstLaunch: firstLaunch)
 
     if let userId = userId {
       setUserId(userId)
@@ -382,9 +402,24 @@ public final class Hamon {
   /// `Hamon.shared`. Recording it here rather than on the first successful PATCH means
   /// `time_to_paywall` has a baseline even when no `userId` is ever supplied, and
   /// `app_first_open_timestamp` is closer to the truth.
-  private func recordFirstOpenIfNeeded() {
-    guard storage.integer(for: .firstOpenTimestamp) == 0 else { return }
+  ///
+  /// - Returns: `true` on the very first launch of this install.
+  private func recordFirstOpenIfNeeded() -> Bool {
+    guard storage.integer(for: .firstOpenTimestamp) == 0 else { return false }
     storage.set(Int(Date().timeIntervalSince1970 * 1000), for: .firstOpenTimestamp)
+    return true
+  }
+
+  /// Sends the IDFA as soon as ATT is granted, without waiting for the next launch.
+  /// Driven by `trackingMonitor`.
+  private func checkTrackingAuthorization() {
+    guard let idfa = deviceInfoService.getIDFA() else { return }
+    trackingMonitor.stopPolling()
+    guard synchronized({ idfa != reportedIdfa }) else { return }
+#if DEBUG
+    debugPrint("[Hamon] ✅ Tracking authorized, reporting IDFA")
+#endif
+    scheduleUserDataUpdate()
   }
 
   private func restoreState() {
@@ -493,6 +528,8 @@ public final class Hamon {
     }
 
     let storageBytes = deviceInfoService.getStorageBytes()
+    let idfa = deviceInfoService.getIDFA()
+    synchronized { reportedIdfa = idfa }
 
     let userData = HUserData(
       package: appleId,
@@ -532,7 +569,10 @@ public final class Hamon {
       clickToPayTime: paywallTracker.clickToPayTime,
       sessionLengthFirst: sessionTracker.sessionLengthFirst,
       tapsCountFirst30s: sessionTracker.tapsCountFirst30s,
-      appsflyerId: snapshot.appsflyerId
+      appsflyerId: snapshot.appsflyerId,
+      idfv: deviceInfoService.getIDFV(),
+      idfa: idfa,
+      odmInfo: onDeviceConversionService.odmInfo
     )
 
     networkService.updateUser(firebaseAppId: userId, userData: userData) { result in
