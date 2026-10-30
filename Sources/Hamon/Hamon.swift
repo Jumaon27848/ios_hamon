@@ -15,6 +15,7 @@ public final class Hamon {
   private var baseURL: String?
   private var _userId: String?
   private var fcmToken: String?
+  private var firebaseMessagingId: String?
   private var affiseID: String?
   private var promoCode: String?
   private var webCustomerID: String?
@@ -147,16 +148,42 @@ public final class Hamon {
 
   // MARK: - Set FCM Token
 
-  /// Set Firebase Cloud Messaging token.
+  /// Set Firebase Cloud Messaging token, reported as `firebase_token`.
   ///
   /// Call this from `MessagingDelegate.messaging(_:didReceiveRegistrationToken:)`
   /// rather than reading `Messaging.messaging().fcmToken` once — the delegate also
   /// fires when the token arrives late or rotates. The value is cached across
   /// launches, so it only has to be supplied once per token.
+  ///
+  /// Apps in FID registration mode call `setFCM(installationId:)` instead. Only one push
+  /// target is ever sent: this clears a previously set installation ID.
   public func setFCM(token: String) {
-    guard store(token, in: \.fcmToken, as: .fcmToken) else { return }
+    guard !token.isEmpty else { return }
+    let changed = store(token, in: \.fcmToken, as: .fcmToken)
+    let cleared = clear(\.firebaseMessagingId, as: .firebaseMessagingId)
+    guard changed || cleared else { return }
 #if DEBUG
     debugPrint("[Hamon] ✅ FCM token set")
+#endif
+    scheduleUserDataUpdate()
+  }
+
+  /// Set the Firebase Installation ID (FID), reported as `firebase_messaging_id`.
+  ///
+  /// For apps with `FirebaseMessagingInstallationIdEnabled` in Info.plist: in that mode
+  /// FCM addresses pushes by FID and issues no registration token. Call this from
+  /// `MessagingDelegate.messaging(_:didReceiveRegistration:)`, which fires on every launch
+  /// and whenever the FID changes.
+  ///
+  /// Only one push target is ever sent: this clears a previously set FCM token, so a
+  /// token cached before the switch to FID mode stops being reported.
+  public func setFCM(installationId: String) {
+    guard !installationId.isEmpty else { return }
+    let changed = store(installationId, in: \.firebaseMessagingId, as: .firebaseMessagingId)
+    let cleared = clear(\.fcmToken, as: .fcmToken)
+    guard changed || cleared else { return }
+#if DEBUG
+    debugPrint("[Hamon] ✅ FCM installation ID set")
 #endif
     scheduleUserDataUpdate()
   }
@@ -408,6 +435,7 @@ public final class Hamon {
   private func restoreState() {
     _userId = storage.string(for: .userId)
     fcmToken = storage.string(for: .fcmToken)
+    firebaseMessagingId = storage.string(for: .firebaseMessagingId)
     affiseID = storage.string(for: .affiseId)
     promoCode = storage.string(for: .promoCode)
     webCustomerID = storage.string(for: .webCustomerId)
@@ -428,6 +456,21 @@ public final class Hamon {
     }
     guard changed else { return false }
     storage.set(value, for: key)
+    return true
+  }
+
+  /// Drops the value and its persisted copy. Returns `false` when there was nothing to clear.
+  private func clear(
+    _ keyPath: ReferenceWritableKeyPath<Hamon, String?>,
+    as key: HStorage.Key
+  ) -> Bool {
+    let cleared = synchronized { () -> Bool in
+      guard self[keyPath: keyPath] != nil else { return false }
+      self[keyPath: keyPath] = nil
+      return true
+    }
+    guard cleared else { return false }
+    storage.set(nil, for: key)
     return true
   }
 
@@ -479,6 +522,7 @@ public final class Hamon {
         userId: _userId,
         networkService: networkService,
         fcmToken: fcmToken,
+        firebaseMessagingId: firebaseMessagingId,
         affiseID: affiseID,
         promoCode: promoCode,
         webCustomerID: webCustomerID,
@@ -517,6 +561,7 @@ public final class Hamon {
       appFirstOpenTimestamp: firstOpenTimestamp != 0 ? firstOpenTimestamp : nowMillis,
       appLastUpdateTimestamp: nowMillis,
       firebaseToken: snapshot.fcmToken,
+      firebaseMessagingId: snapshot.firebaseMessagingId,
       geo: deviceInfoService.getCountryCode(),
       osVersion: deviceInfoService.getOSVersion(),
       device: nil,

@@ -193,6 +193,46 @@ extension AppDelegate: MessagingDelegate {
 > the callback also fires when the token arrives late (after APNs registration completes)
 > and whenever it rotates.
 
+#### FID Registration Mode (Firebase Installation ID)
+
+Firebase is moving FCM from registration tokens to the Firebase Installation ID (FID).
+Since FirebaseMessaging 12.18.0 the token APIs — `messaging(_:didReceiveRegistrationToken:)`,
+`token(completion:)` — are deprecated and slated for removal. An app that opts into FID
+mode gets no token at all: pass the FID with `setFCM(installationId:)` instead. It is
+reported as `firebase_messaging_id`.
+
+1. Use **FirebaseMessaging 12.19.0 or newer.** Earlier versions had FID-mode bugs: on
+   installs upgraded from token mode the SDK kept handing out the cached legacy token
+   instead of the FID ([#16429](https://github.com/firebase/firebase-ios-sdk/issues/16429),
+   fixed in 12.18.0), with further FID-mode fixes in 12.19.0.
+2. Turn the mode on in the app's `Info.plist` (not `GoogleService-Info.plist`):
+
+   ```xml
+   <key>FirebaseMessagingInstallationIdEnabled</key>
+   <true/>
+   ```
+
+3. Report the FID from the new delegate method instead of the token one. It fires on
+   every launch and again whenever the FID changes:
+
+   ```swift
+   extension AppDelegate: MessagingDelegate {
+       func messaging(_ messaging: Messaging, didReceiveRegistration installationId: String?) {
+           guard let installationId else { return }
+           Hamon.shared.setFCM(installationId: installationId)
+       }
+   }
+   ```
+
+The three prerequisites above (Push Notifications capability, APNs key,
+`registerForRemoteNotifications()`) apply unchanged — FCM still delivers through APNs.
+
+**Only one push target is sent.** `setFCM(installationId:)` clears a previously stored
+token and `setFCM(token:)` clears a stored FID, so after the switch the backend sees
+`firebase_messaging_id` with `firebase_token: null` and knows to address pushes by
+the `fid` field of the FCM HTTP v1 API rather than `token`. The Android SDK sends the
+same pair of fields.
+
 ### In-App Purchases (`appAccountToken`)
 
 Apple stamps `appAccountToken` into the transaction permanently and echoes it back in
@@ -401,6 +441,9 @@ func setWebCustomerId(_ id: String)
 /// Set Firebase Cloud Messaging token
 func setFCM(token: String)
 
+/// Set Firebase Installation ID (FCM in FID registration mode). Clears the token, and vice versa
+func setFCM(installationId: String)
+
 /// Record the GDPR consent decision. Defaults to .unknown; the field is never null.
 /// Invalid values passed to the String overload are ignored, keeping the previous decision.
 func setGdprConsent(_ status: Hamon.GdprConsent)   // .accepted / .rejected / .unknown
@@ -498,6 +541,7 @@ SDK automatically collects:
 | `odm_info` | Google on-device conversion info (ICM) — absent until available | `abcdEfadGdaf` |
 | `is_limited_ad_tracking` | Ad tracking status | `false` |
 | `firebase_token` | FCM token | `xxxxx` |
+| `firebase_messaging_id` | Firebase Installation ID in FID mode, `firebase_token` is null then | `cXyz...` |
 | `app_first_open_timestamp` | First launch time | `1234567890000` |
 | `app_last_update_timestamp` | Last update time | `1234567890000` |
 | `connection_type` | `wifi`, `cellular` or `none` | `wifi` |

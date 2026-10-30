@@ -86,6 +86,7 @@ Detailed technical documentation for Hamon iOS SDK.
 public func configure(host: String, useHTTPS: Bool = false, userId: String? = nil)
 public func setUserId(_ userId: String)
 public func setFCM(token: String)
+public func setFCM(installationId: String)
 
 public func setGdprConsent(_ status: Hamon.GdprConsent)
 public func setGdprConsent(_ status: String)
@@ -469,6 +470,7 @@ public func setFCM(token: String)
 
 Sets Firebase Cloud Messaging token. Sent to the server as `firebase_token`, cached across
 launches and re-sent automatically — it only has to be supplied once per token.
+Clears a previously set installation ID — see [setFCM(installationId:)](#setfcminstallationid).
 
 **Parameters:**
 - `token`: FCM token for push notifications
@@ -493,6 +495,44 @@ func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: Str
 Prefer the delegate over a one-shot read of `Messaging.messaging().fcmToken`: at launch the
 token is often not available yet, because it cannot be minted until APNs registration
 completes.
+
+#### setFCM(installationId:)
+
+```swift
+public func setFCM(installationId: String)
+```
+
+Sets the Firebase Installation ID (FID) for apps in FCM's FID registration mode. Sent to
+the server as `firebase_messaging_id`, cached across launches and re-sent automatically.
+Empty strings are ignored.
+
+Firebase is replacing FCM registration tokens with FIDs: since FirebaseMessaging 12.18.0
+`messaging(_:didReceiveRegistrationToken:)` and `token(completion:)` are deprecated, and an
+app with FID mode on receives no token at all.
+
+**Parameters:**
+- `installationId`: the FID delivered by `MessagingDelegate.messaging(_:didReceiveRegistration:)`
+
+**Requires:** FirebaseMessaging 12.19.0+ (before 12.18.0 the SDK kept returning the cached
+legacy token on upgraded installs, firebase-ios-sdk #16429) and `FirebaseMessagingInstallationIdEnabled = YES`
+in the app's `Info.plist` — not `GoogleService-Info.plist`. The APNs prerequisites of
+`setFCM(token:)` still apply.
+
+**Example:**
+```swift
+// MessagingDelegate — fires on every launch and whenever the FID changes
+func messaging(_ messaging: Messaging, didReceiveRegistration installationId: String?) {
+    guard let installationId else { return }
+    Hamon.shared.setFCM(installationId: installationId)
+}
+```
+
+**Exactly one push target is reported.** `setFCM(installationId:)` clears a stored token and
+`setFCM(token:)` clears a stored FID, so the payload carries either `firebase_token` or
+`firebase_messaging_id`, the other being `null`. That tells the backend whether to address
+pushes by `token` or by `fid` in the FCM HTTP v1 API, and stops a token cached before the
+switch from being reported. Android sends the same pair of fields, choosing by the
+`firebase_messaging_installation_id_enabled` manifest flag.
 
 #### userId
 
@@ -810,6 +850,7 @@ Decrypted payload:
   "app_last_update_timestamp": 1234567890000,
   "app_delete_timestamp": null,
   "firebase_token": "fcm_token_here",
+  "firebase_messaging_id": null,
   "geo": "US",
   "os_version": "17.0",
   "device": null,

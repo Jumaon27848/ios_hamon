@@ -9,6 +9,8 @@ public struct HUserData: Codable {
   public let appLastUpdateTimestamp: Int?
   public let appDeleteTimestamp: Int? = nil
   public let firebaseToken: String?
+  /// Firebase Installation ID, set instead of `firebaseToken` in FID registration mode.
+  public let firebaseMessagingId: String?
   public let geo: String?
   public let osVersion: String?
   public let device: String?
@@ -65,6 +67,7 @@ public struct HUserData: Codable {
     case appLastUpdateTimestamp = "app_last_update_timestamp"
     case appDeleteTimestamp = "app_delete_timestamp"
     case firebaseToken = "firebase_token"
+    case firebaseMessagingId = "firebase_messaging_id"
     case geo
     case osVersion = "os_version"
     case device
@@ -113,6 +116,7 @@ public struct HUserData: Codable {
     try container.encode(appLastUpdateTimestamp, forKey: .appLastUpdateTimestamp)
     try container.encode(appDeleteTimestamp, forKey: .appDeleteTimestamp)
     try container.encode(firebaseToken, forKey: .firebaseToken)
+    try container.encode(firebaseMessagingId, forKey: .firebaseMessagingId)
     try container.encode(geo, forKey: .geo)
     try container.encode(osVersion, forKey: .osVersion)
     try container.encode(device, forKey: .device)

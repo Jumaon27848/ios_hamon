@@ -99,7 +99,7 @@ final class HamonTests: XCTestCase {
     "hamon_version", "time_to_paywall", "actions_before_paywall",
     "inters_shown_before_paywall", "aoa_shown_before_paywall", "paywall_conversion_time",
     "click_to_pay_time", "session_length_first", "taps_count_first_30s",
-    "idfv",
+    "idfv", "firebase_messaging_id",
   ]
 
   /// Sent only when there is a value — never as an explicit null.
@@ -117,6 +117,7 @@ final class HamonTests: XCTestCase {
       appFirstOpenTimestamp: 1234567890000,
       appLastUpdateTimestamp: nil,
       firebaseToken: firebaseToken,
+      firebaseMessagingId: nil,
       geo: geo,
       osVersion: "16.0",
       device: "iPhone14,2",

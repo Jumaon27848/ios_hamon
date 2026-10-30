@@ -12,6 +12,7 @@ final class HStorage {
   enum Key: String, CaseIterable {
     case userId = "Hamon_userId"
     case fcmToken = "Hamon_fcmToken"
+    case firebaseMessagingId = "Hamon_firebaseMessagingId"
     case affiseId = "Hamon_affiseId"
     case promoCode = "Hamon_promoCode"
     case webCustomerId = "Hamon_webCustomerId"

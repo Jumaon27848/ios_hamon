@@ -192,6 +192,46 @@ extension AppDelegate: MessagingDelegate {
 > Делегат надёжнее разового чтения `Messaging.messaging().fcmToken` на старте: колбэк
 > срабатывает и когда токен приходит с задержкой (после регистрации в APNs), и при ротации.
 
+#### Режим FID (Firebase Installation ID)
+
+Firebase переводит FCM с registration token на Firebase Installation ID (FID). Начиная с
+FirebaseMessaging 12.18.0 API токенов — `messaging(_:didReceiveRegistrationToken:)`,
+`token(completion:)` — помечены deprecated и будут удалены. Приложение в режиме FID
+токен не получает вовсе: вместо него передавайте FID через `setFCM(installationId:)`.
+На сервер он уходит в поле `firebase_messaging_id`.
+
+1. Используйте **FirebaseMessaging 12.19.0 или новее.** В ранних версиях режим FID был с
+   багами: на установках, обновлённых с режима токенов, SDK продолжал отдавать
+   закешированный старый токен вместо FID
+   ([#16429](https://github.com/firebase/firebase-ios-sdk/issues/16429), исправлено в
+   12.18.0); ещё часть исправлений для режима FID вошла в 12.19.0.
+2. Включите режим в `Info.plist` приложения (не в `GoogleService-Info.plist`):
+
+   ```xml
+   <key>FirebaseMessagingInstallationIdEnabled</key>
+   <true/>
+   ```
+
+3. Передавайте FID из нового метода делегата вместо токенного. Он вызывается при
+   каждом запуске и повторно, когда FID меняется:
+
+   ```swift
+   extension AppDelegate: MessagingDelegate {
+       func messaging(_ messaging: Messaging, didReceiveRegistration installationId: String?) {
+           guard let installationId else { return }
+           Hamon.shared.setFCM(installationId: installationId)
+       }
+   }
+   ```
+
+Три условия выше (capability Push Notifications, APNs-ключ,
+`registerForRemoteNotifications()`) остаются в силе — FCM по-прежнему доставляет через APNs.
+
+**Отправляется только одна цель для пушей.** `setFCM(installationId:)` стирает ранее
+сохранённый токен, а `setFCM(token:)` — сохранённый FID. После перехода бэкенд видит
+`firebase_messaging_id` и `firebase_token: null` и понимает, что пуши надо адресовать
+через поле `fid` в FCM HTTP v1 API, а не `token`. Android SDK отправляет ту же пару полей.
+
 ### Покупки (`appAccountToken`)
 
 Apple вшивает `appAccountToken` в транзакцию навсегда и возвращает его в App Store Server
@@ -398,6 +438,9 @@ func setWebCustomerId(_ id: String)
 /// Установить Firebase Cloud Messaging токен
 func setFCM(token: String)
 
+/// Установить Firebase Installation ID (FCM в режиме FID). Стирает токен, и наоборот
+func setFCM(installationId: String)
+
 /// Зафиксировать решение по GDPR. По умолчанию .unknown, поле никогда не бывает null.
 /// Невалидные значения в String-перегрузке игнорируются — прежнее решение сохраняется.
 func setGdprConsent(_ status: Hamon.GdprConsent)   // .accepted / .rejected / .unknown
@@ -495,6 +538,7 @@ SDK автоматически собирает:
 | `odm_info` | Данные Google on-device conversion (ICM) — нет, пока не получены | `abcdEfadGdaf` |
 | `is_limited_ad_tracking` | Статус отслеживания рекламы | `false` |
 | `firebase_token` | FCM токен | `xxxxx` |
+| `firebase_messaging_id` | Firebase Installation ID в режиме FID, `firebase_token` тогда null | `cXyz...` |
 | `app_first_open_timestamp` | Время первого запуска | `1234567890000` |
 | `app_last_update_timestamp` | Время последнего обновления | `1234567890000` |
 | `connection_type` | `wifi`, `cellular` или `none` | `wifi` |
