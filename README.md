@@ -405,9 +405,6 @@ func setFCM(token: String)
 /// Invalid values passed to the String overload are ignored, keeping the previous decision.
 func setGdprConsent(_ status: Hamon.GdprConsent)   // .accepted / .rejected / .unknown
 func setGdprConsent(_ status: String)
-
-/// Set the AppsFlyer device ID. Sticky — never cleared once recorded.
-func setAppsFlyerId(_ id: String)
 ```
 
 ### Paywall Funnel
@@ -517,7 +514,6 @@ Set by the host app:
 | `web_customer_id` | `setWebCustomerId(_:)` | `abc123` |
 | `affise_clickid` / `affise_promo_code` | `setAffiseId(_:)` / `setPromoCode(_:)` | `xxxxx` |
 | `gdpr_consent_status` | `setGdprConsent(_:)`, defaults to `unknown` | `accepted` |
-| `appsflyer_id` | `setAppsFlyerId(_:)` | `1234567890-1234567` |
 
 Behavioural metrics — see [Paywall Funnel](#paywall-funnel):
 

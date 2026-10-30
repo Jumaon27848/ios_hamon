@@ -89,7 +89,6 @@ public func setFCM(token: String)
 
 public func setGdprConsent(_ status: Hamon.GdprConsent)
 public func setGdprConsent(_ status: String)
-public func setAppsFlyerId(_ id: String)
 
 // Identity
 public var userId: String? { get }
@@ -844,8 +843,7 @@ Decrypted payload:
   "paywall_conversion_time": 3500000,
   "click_to_pay_time": 6,
   "session_length_first": 12345,
-  "taps_count_first_30s": 7,
-  "appsflyer_id": null
+  "taps_count_first_30s": 7
 }
 ```
 

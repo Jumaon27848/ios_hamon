@@ -19,7 +19,6 @@ public final class Hamon {
   private var promoCode: String?
   private var webCustomerID: String?
   private var gdprConsentStatus: String?
-  private var appsflyerId: String?
   /// The IDFA the last PATCH carried — lets `checkTrackingAuthorization` tell a fresh
   /// grant from one already reported.
   private var reportedIdfa: String?
@@ -201,22 +200,6 @@ public final class Hamon {
     case accepted
     case rejected
     case unknown
-  }
-
-  // MARK: - Set AppsFlyer ID
-
-  /// Set the AppsFlyer device ID, reported as `appsflyer_id`.
-  ///
-  /// Pass `AppsFlyerLib.shared().getAppsFlyerUID()` once AppsFlyer has started. The value
-  /// is sticky: once recorded it is never cleared, so a later AppsFlyer failure cannot
-  /// blank out an id the backend has already seen.
-  public func setAppsFlyerId(_ id: String) {
-    guard !id.isEmpty else { return }
-    guard store(id, in: \.appsflyerId, as: .appsflyerId) else { return }
-#if DEBUG
-    debugPrint("[Hamon] ✅ AppsFlyer ID set: \(id)")
-#endif
-    scheduleUserDataUpdate()
   }
 
   // MARK: - Paywall Funnel
@@ -429,7 +412,6 @@ public final class Hamon {
     promoCode = storage.string(for: .promoCode)
     webCustomerID = storage.string(for: .webCustomerId)
     gdprConsentStatus = storage.string(for: .gdprConsentStatus)
-    appsflyerId = storage.string(for: .appsflyerId)
   }
 
   /// Assigns `value` and persists it. Returns `false` when nothing changed, so
@@ -500,8 +482,7 @@ public final class Hamon {
         affiseID: affiseID,
         promoCode: promoCode,
         webCustomerID: webCustomerID,
-        gdprConsentStatus: gdprConsentStatus,
-        appsflyerId: appsflyerId
+        gdprConsentStatus: gdprConsentStatus
       )
     }
 
@@ -569,7 +550,6 @@ public final class Hamon {
       clickToPayTime: paywallTracker.clickToPayTime,
       sessionLengthFirst: sessionTracker.sessionLengthFirst,
       tapsCountFirst30s: sessionTracker.tapsCountFirst30s,
-      appsflyerId: snapshot.appsflyerId,
       idfv: deviceInfoService.getIDFV(),
       idfa: idfa,
       odmInfo: onDeviceConversionService.odmInfo

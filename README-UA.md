@@ -402,9 +402,6 @@ func setFCM(token: String)
 /// Невалідні значення в String-перевантаженні ігноруються — попереднє рішення зберігається.
 func setGdprConsent(_ status: Hamon.GdprConsent)   // .accepted / .rejected / .unknown
 func setGdprConsent(_ status: String)
-
-/// Встановити AppsFlyer device ID. Липке значення — одного разу записане не стирається.
-func setAppsFlyerId(_ id: String)
 ```
 
 ### Воронка пейволу
@@ -513,7 +510,6 @@ SDK автоматично збирає:
 | `web_customer_id` | `setWebCustomerId(_:)` | `abc123` |
 | `affise_clickid` / `affise_promo_code` | `setAffiseId(_:)` / `setPromoCode(_:)` | `xxxxx` |
 | `gdpr_consent_status` | `setGdprConsent(_:)`, за замовчуванням `unknown` | `accepted` |
-| `appsflyer_id` | `setAppsFlyerId(_:)` | `1234567890-1234567` |
 
 Поведінкові метрики — див. [Воронка пейволу](#воронка-пейволу):
 

@@ -98,7 +98,7 @@ final class HamonTests: XCTestCase {
     "manufacturer", "brand", "storage_total", "storage_free", "gdpr_consent_status",
     "hamon_version", "time_to_paywall", "actions_before_paywall",
     "inters_shown_before_paywall", "aoa_shown_before_paywall", "paywall_conversion_time",
-    "click_to_pay_time", "session_length_first", "taps_count_first_30s", "appsflyer_id",
+    "click_to_pay_time", "session_length_first", "taps_count_first_30s",
     "idfv",
   ]
 
@@ -150,7 +150,6 @@ final class HamonTests: XCTestCase {
       clickToPayTime: 6,
       sessionLengthFirst: 12_345,
       tapsCountFirst30s: 7,
-      appsflyerId: "1234567890-1234567",
       idfv: "11111111-2222-3333-4444-555555555555",
       idfa: idfa,
       odmInfo: odmInfo

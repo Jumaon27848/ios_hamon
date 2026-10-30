@@ -16,7 +16,6 @@ final class HStorage {
     case promoCode = "Hamon_promoCode"
     case webCustomerId = "Hamon_webCustomerId"
     case gdprConsentStatus = "Hamon_gdprConsentStatus"
-    case appsflyerId = "Hamon_appsflyerId"
     case sessionLengthFirst = "Hamon_sessionLengthFirst"
     case tapsCountFirst30s = "Hamon_tapsCountFirst30s"
 
