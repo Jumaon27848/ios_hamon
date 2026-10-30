@@ -546,7 +546,7 @@ SDK автоматически собирает:
 | `ram_total_bytes` | Установленная RAM, байты | `6442450944` |
 | `manufacturer` / `brand` | На iOS всегда `Apple` | `Apple` |
 | `storage_total` / `storage_free` | Ёмкость тома, байты | `128000000000` |
-| `hamon_version` | Версия SDK | `1.2.0` |
+| `hamon_version` | Версия SDK | `2.0.0` |
 
 Задаются хост-приложением:
 

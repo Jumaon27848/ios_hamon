@@ -549,7 +549,7 @@ SDK automatically collects:
 | `ram_total_bytes` | Installed RAM, bytes | `6442450944` |
 | `manufacturer` / `brand` | Always `Apple` on iOS | `Apple` |
 | `storage_total` / `storage_free` | Volume capacity, bytes | `128000000000` |
-| `hamon_version` | SDK version | `1.2.0` |
+| `hamon_version` | SDK version | `2.0.0` |
 
 Set by the host app:
 
