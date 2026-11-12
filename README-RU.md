@@ -543,10 +543,16 @@ SDK автоматически собирает:
 | `app_last_update_timestamp` | Время последнего обновления | `1234567890000` |
 | `connection_type` | `wifi`, `cellular` или `none` | `wifi` |
 | `screen_resolution` | Размер экрана в пикселях | `1179x2556` |
+| `screen_scale` | Масштаб экрана (DPR), `UIScreen.main.scale` | `3.0` |
+| `native_screen_resolution` | `UIScreen.nativeBounds` в пикселях, портретная ориентация | `1179x2556` |
+| `preferred_languages` | `Locale.preferredLanguages`, самый предпочтительный первым | `["uk-UA", "en-US"]` |
+| `device_timezone` | Часовой пояс устройства, IANA id | `Europe/Kyiv` |
+| `reported_ipv4` | Публичный IPv4 от `api.ipify.org` — null, если не ответил | `203.0.113.7` |
+| `reported_ipv6` | Публичный IPv6 от `api6.ipify.org` — null, если не ответил или IPv6 нет | `2001:db8::1` |
 | `ram_total_bytes` | Установленная RAM, байты | `6442450944` |
 | `manufacturer` / `brand` | На iOS всегда `Apple` | `Apple` |
 | `storage_total` / `storage_free` | Ёмкость тома, байты | `128000000000` |
-| `hamon_version` | Версия SDK | `2.0.0` |
+| `hamon_version` | Версия SDK | `2.1.0` |
 
 Задаются хост-приложением:
 

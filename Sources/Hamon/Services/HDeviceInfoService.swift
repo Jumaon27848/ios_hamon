@@ -101,6 +101,40 @@ final class HDeviceInfoService {
 #endif
   }()
 
+  /// Reported as `native_screen_resolution` — the same `UIScreen.nativeBounds` value as
+  /// ``screenResolution``. The separate key lets `screen_resolution` stay free to
+  /// follow Android's semantics should it ever change.
+  var nativeScreenResolution: String? { screenResolution }
+
+  /// `UIScreen.main.scale` — device pixel ratio (`2.0`, `3.0`). Cached for the same
+  /// reasons as ``screenResolution``.
+  private(set) lazy var screenScale: Double? = {
+#if canImport(UIKit)
+    let scale = Double(UIScreen.main.scale)
+    return scale > 0 ? scale : nil
+#else
+    return nil
+#endif
+  }()
+
+  // MARK: - Locale & Time Zone
+
+  /// The user's language list from Settings, most preferred first (`["uk-UA", "en-US"]`).
+  /// Read fresh on every PATCH: the list changes without an app relaunch.
+  func getPreferredLanguages() -> [String]? {
+    let languages = Locale.preferredLanguages
+    return languages.isEmpty ? nil : languages
+  }
+
+  /// IANA identifier of the device's time zone (`"Europe/Kyiv"`). `TimeZone.current` is
+  /// cached by Foundation, so the cache is reset first to pick up a zone change made
+  /// while the app was running.
+  func getDeviceTimezone() -> String? {
+    NSTimeZone.resetSystemTimeZone()
+    let identifier = TimeZone.current.identifier
+    return identifier.isEmpty ? nil : identifier
+  }
+
   /// Installed RAM in bytes.
   ///
   /// Note this is the full installed amount (exactly `4294967296` on a 4 GB device),

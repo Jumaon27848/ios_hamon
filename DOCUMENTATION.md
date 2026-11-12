@@ -365,6 +365,14 @@ library arrives with Firebase via CocoaPods and a SwiftPM dependency would dupli
 | library missing | done, field never sent |
 | error | retried after 15 s, 30 s; at most 3 attempts per install, also across launches |
 
+#### Public IP (`reported_ipv4`, `reported_ipv6`)
+
+`HPublicIPService` asks `https://api.ipify.org` (IPv4-only host) and `https://api6.ipify.org`
+(IPv6-only host) in parallel before every PATCH, with a 5 s timeout. A family that times
+out, errors, or answers with something that isn't an address of that family (captive
+portal page) is sent as `null`. The fetch runs on the serial update queue, so it delays
+the PATCH by at most the timeout.
+
 #### Country Code Priority
 
 1. `Locale.current.regionCode`
@@ -884,7 +892,14 @@ Decrypted payload:
   "paywall_conversion_time": 3500000,
   "click_to_pay_time": 6,
   "session_length_first": 12345,
-  "taps_count_first_30s": 7
+  "taps_count_first_30s": 7,
+  "idfv": "XXXXXXXX-...",
+  "reported_ipv4": "203.0.113.7",
+  "reported_ipv6": null,
+  "screen_scale": 3,
+  "preferred_languages": ["uk-UA", "en-US"],
+  "device_timezone": "Europe/Kyiv",
+  "native_screen_resolution": "1179x2556"
 }
 ```
 

@@ -546,10 +546,16 @@ SDK automatically collects:
 | `app_last_update_timestamp` | Last update time | `1234567890000` |
 | `connection_type` | `wifi`, `cellular` or `none` | `wifi` |
 | `screen_resolution` | Screen size in pixels | `1179x2556` |
+| `screen_scale` | Screen scale (DPR), `UIScreen.main.scale` | `3.0` |
+| `native_screen_resolution` | `UIScreen.nativeBounds` in pixels, portrait | `1179x2556` |
+| `preferred_languages` | `Locale.preferredLanguages`, most preferred first | `["uk-UA", "en-US"]` |
+| `device_timezone` | Device time zone, IANA id | `Europe/Kyiv` |
+| `reported_ipv4` | Public IPv4 from `api.ipify.org` — null when it didn't answer | `203.0.113.7` |
+| `reported_ipv6` | Public IPv6 from `api6.ipify.org` — null when it didn't answer or there is no IPv6 | `2001:db8::1` |
 | `ram_total_bytes` | Installed RAM, bytes | `6442450944` |
 | `manufacturer` / `brand` | Always `Apple` on iOS | `Apple` |
 | `storage_total` / `storage_free` | Volume capacity, bytes | `128000000000` |
-| `hamon_version` | SDK version | `2.0.0` |
+| `hamon_version` | SDK version | `2.1.0` |
 
 Set by the host app:
 

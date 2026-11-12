@@ -55,6 +55,19 @@ public struct HUserData: Codable {
   public let idfa: String?
   /// Google on-device conversion info (ICM) — omitted from the payload until there is one.
   public let odmInfo: String?
+  /// Public IPv4 as reported by `api.ipify.org` — null when it didn't answer.
+  public let reportedIpv4: String?
+  /// Public IPv6 as reported by `api6.ipify.org` — null when it didn't answer, which
+  /// includes every network without IPv6.
+  public let reportedIpv6: String?
+  /// `UIScreen.main.scale` — points-to-pixels factor (DPR), e.g. `3.0`.
+  public let screenScale: Double?
+  /// `Locale.preferredLanguages`, most preferred first, e.g. `["uk-UA", "en-US"]`.
+  public let preferredLanguages: [String]?
+  /// `TimeZone.current.identifier`, e.g. `"Europe/Kyiv"`.
+  public let deviceTimezone: String?
+  /// `UIScreen.nativeBounds` in pixels, `"<width>x<height>"`, portrait-referenced.
+  public let nativeScreenResolution: String?
 
   // Note: Android also sends `carrier`, which iOS cannot collect — CTCarrier is
   // deprecated since iOS 16 and returns the placeholder "--" from 16.4 on. The key is
@@ -105,6 +118,12 @@ public struct HUserData: Codable {
     case idfv
     case idfa
     case odmInfo = "odm_info"
+    case reportedIpv4 = "reported_ipv4"
+    case reportedIpv6 = "reported_ipv6"
+    case screenScale = "screen_scale"
+    case preferredLanguages = "preferred_languages"
+    case deviceTimezone = "device_timezone"
+    case nativeScreenResolution = "native_screen_resolution"
   }
   
   // Кастомный энкодер, чтобы null явно отправлялся для всех Optional
@@ -152,6 +171,12 @@ public struct HUserData: Codable {
     try container.encode(sessionLengthFirst, forKey: .sessionLengthFirst)
     try container.encode(tapsCountFirst30s, forKey: .tapsCountFirst30s)
     try container.encode(idfv, forKey: .idfv)
+    try container.encode(reportedIpv4, forKey: .reportedIpv4)
+    try container.encode(reportedIpv6, forKey: .reportedIpv6)
+    try container.encode(screenScale, forKey: .screenScale)
+    try container.encode(preferredLanguages, forKey: .preferredLanguages)
+    try container.encode(deviceTimezone, forKey: .deviceTimezone)
+    try container.encode(nativeScreenResolution, forKey: .nativeScreenResolution)
     // The two exceptions to the explicit-null rule: the spec asks for these keys to be
     // absent, not null, when there is no value.
     try container.encodeIfPresent(idfa, forKey: .idfa)

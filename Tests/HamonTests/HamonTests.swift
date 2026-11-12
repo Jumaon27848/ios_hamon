@@ -99,7 +99,8 @@ final class HamonTests: XCTestCase {
     "hamon_version", "time_to_paywall", "actions_before_paywall",
     "inters_shown_before_paywall", "aoa_shown_before_paywall", "paywall_conversion_time",
     "click_to_pay_time", "session_length_first", "taps_count_first_30s",
-    "idfv", "firebase_messaging_id",
+    "idfv", "firebase_messaging_id", "reported_ipv4", "reported_ipv6", "screen_scale",
+    "preferred_languages", "device_timezone", "native_screen_resolution",
   ]
 
   /// Sent only when there is a value — never as an explicit null.
@@ -110,7 +111,9 @@ final class HamonTests: XCTestCase {
     firebaseToken: String? = "fcm_token",
     geo: String? = "UA",
     idfa: String? = nil,
-    odmInfo: String? = nil
+    odmInfo: String? = nil,
+    reportedIpv4: String? = "203.0.113.7",
+    reportedIpv6: String? = "2001:db8::1"
   ) -> HUserData {
     HUserData(
       package: package,
@@ -153,7 +156,13 @@ final class HamonTests: XCTestCase {
       tapsCountFirst30s: 7,
       idfv: "11111111-2222-3333-4444-555555555555",
       idfa: idfa,
-      odmInfo: odmInfo
+      odmInfo: odmInfo,
+      reportedIpv4: reportedIpv4,
+      reportedIpv6: reportedIpv6,
+      screenScale: 3.0,
+      preferredLanguages: ["uk-UA", "en-US"],
+      deviceTimezone: "Europe/Kyiv",
+      nativeScreenResolution: "1179x2556"
     )
   }
 
@@ -541,6 +550,72 @@ final class HamonTests: XCTestCase {
       resolution.range(of: "^[1-9][0-9]*x[1-9][0-9]*$", options: .regularExpression),
       "Expected \"<width>x<height>\" in pixels, got \(resolution)"
     )
+  }
+
+  func testScreenScale() throws {
+    let scale = try XCTUnwrap(HDeviceInfoService().screenScale)
+
+    XCTAssertGreaterThanOrEqual(scale, 1)
+  }
+
+  func testNativeScreenResolutionMatchesScreenResolution() {
+    let service = HDeviceInfoService()
+
+    XCTAssertEqual(service.nativeScreenResolution, service.screenResolution)
+  }
+
+  func testDeviceTimezoneIsIanaIdentifier() throws {
+    let timezone = try XCTUnwrap(HDeviceInfoService().getDeviceTimezone())
+
+    XCTAssertNotNil(TimeZone(identifier: timezone))
+  }
+
+  func testPreferredLanguages() throws {
+    let languages = try XCTUnwrap(HDeviceInfoService().getPreferredLanguages())
+
+    XCTAssertEqual(languages, Locale.preferredLanguages)
+  }
+
+  func testNewDeviceFieldsOnTheWire() throws {
+    let data = try JSONEncoder().encode(makeUserData())
+    let json = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+
+    XCTAssertEqual(json["reported_ipv4"] as? String, "203.0.113.7")
+    XCTAssertEqual(json["reported_ipv6"] as? String, "2001:db8::1")
+    XCTAssertEqual(json["screen_scale"] as? Double, 3.0)
+    XCTAssertEqual(json["preferred_languages"] as? [String], ["uk-UA", "en-US"])
+    XCTAssertEqual(json["device_timezone"] as? String, "Europe/Kyiv")
+    XCTAssertEqual(json["native_screen_resolution"] as? String, "1179x2556")
+  }
+
+  /// No answer from ipify must ship as an explicit null, not as a missing key.
+  func testReportedIpsAreExplicitNullWhenUnknown() throws {
+    let data = try JSONEncoder().encode(makeUserData(reportedIpv4: nil, reportedIpv6: nil))
+    let json = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+
+    XCTAssertTrue(json["reported_ipv4"] is NSNull)
+    XCTAssertTrue(json["reported_ipv6"] is NSNull)
+  }
+
+  // MARK: - Public IP
+
+  func testPublicIPParseAcceptsAddressesOfItsFamily() {
+    XCTAssertEqual(HPublicIPService.parse(Data("203.0.113.7
+".utf8), as: .ipv4), "203.0.113.7")
+    XCTAssertEqual(HPublicIPService.parse(Data("2001:db8::1".utf8), as: .ipv6), "2001:db8::1")
+  }
+
+  func testPublicIPParseRejectsEverythingElse() {
+    XCTAssertNil(HPublicIPService.parse(nil, as: .ipv4))
+    XCTAssertNil(HPublicIPService.parse(Data(), as: .ipv4))
+    XCTAssertNil(HPublicIPService.parse(Data("2001:db8::1".utf8), as: .ipv4))
+    XCTAssertNil(HPublicIPService.parse(Data("203.0.113.7".utf8), as: .ipv6))
+    XCTAssertNil(HPublicIPService.parse(Data("<html>Log in to Wi-Fi</html>".utf8), as: .ipv4))
+    XCTAssertNil(HPublicIPService.parse(Data("999.1.1.1".utf8), as: .ipv4))
   }
 
   func testRamTotalBytes() throws {

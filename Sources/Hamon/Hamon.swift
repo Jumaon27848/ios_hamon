@@ -31,6 +31,7 @@ public final class Hamon {
   private let eventQueue = HEventQueue()
   private let storage = HStorage()
   private let connectivityService = HConnectivityService()
+  private let publicIPService = HPublicIPService()
   private let sessionTracker: HSessionTracker
   private let paywallTracker: HPaywallTracker
   private let onDeviceConversionService: HOnDeviceConversionService
@@ -553,6 +554,9 @@ public final class Hamon {
     }
 
     let storageBytes = deviceInfoService.getStorageBytes()
+    // Blocks this serial queue for at most a few seconds — later PATCHes simply queue
+    // up behind it, and the debounce has already collapsed bursts.
+    let publicIP = publicIPService.fetch()
     let idfa = deviceInfoService.getIDFA()
     synchronized { reportedIdfa = idfa }
 
@@ -597,7 +601,13 @@ public final class Hamon {
       tapsCountFirst30s: sessionTracker.tapsCountFirst30s,
       idfv: deviceInfoService.getIDFV(),
       idfa: idfa,
-      odmInfo: onDeviceConversionService.odmInfo
+      odmInfo: onDeviceConversionService.odmInfo,
+      reportedIpv4: publicIP.ipv4,
+      reportedIpv6: publicIP.ipv6,
+      screenScale: deviceInfoService.screenScale,
+      preferredLanguages: deviceInfoService.getPreferredLanguages(),
+      deviceTimezone: deviceInfoService.getDeviceTimezone(),
+      nativeScreenResolution: deviceInfoService.nativeScreenResolution
     )
 
     networkService.updateUser(firebaseAppId: userId, userData: userData) { result in
